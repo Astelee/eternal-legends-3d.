@@ -5,47 +5,38 @@ signal state_changed(new_state: int)
 
 enum State { IDLE, WALK, RUN, ATTACK, HURT, DEAD }
 
-# Índice 0 = direita, e segue no sentido horário (a tela tem o Y para baixo).
-const DIRECTION_NAMES := ["right", "down_right", "down", "down_left", "left", "up_left", "up", "up_right"]
+const FRAME_COLS := 12
+const FRAME_SIZE := 16
 
-const STATE_NAMES := {
-	State.IDLE: "idle",
-	State.WALK: "walk",
-	State.RUN: "run",
-	State.ATTACK: "attack",
-	State.HURT: "hurt",
-	State.DEAD: "death",
-}
-
-const STATE_COLORS := {
-	State.IDLE: Color(0.25, 0.45, 0.9),
-	State.WALK: Color(0.2, 0.75, 0.8),
-	State.RUN: Color(0.7, 0.4, 0.95),
-	State.ATTACK: Color(1.0, 0.55, 0.1),
-	State.HURT: Color(0.9, 0.15, 0.15),
-	State.DEAD: Color(0.3, 0.3, 0.3),
-}
-
+# Qual personagem de assets/characters/tiny_dungeon.png usar (índice da peça).
+# 96 = guerreiro, 112 = arqueiro, 84 = mago.
+@export var character_frame: int = 96
 @export var walk_speed: float = 45.0
 @export var run_speed: float = 80.0
 @export var run_threshold: float = 0.85
 @export var attack_time: float = 0.5
 @export var hurt_time: float = 0.4
-@export var world_limit: Rect2 = Rect2(-640, -640, 1280, 1280)
+@export var world_limit: Rect2 = Rect2(0, 0, 640, 480)
 
 var joystick: VirtualJoystick
 var state: int = State.IDLE
 var direction_index: int = 2
 
 var _state_timer: float = 0.0
+var _anim_time: float = 0.0
+var _facing: Vector2 = Vector2.DOWN
+var _facing_left: bool = false
 
-# Quando existir um AnimatedSprite2D filho, ele é usado no lugar do desenho provisório.
-# Nomes das animações: <estado>_<direção>, por exemplo walk_down_right.
-@onready var _sprite: AnimatedSprite2D = get_node_or_null("AnimatedSprite2D")
+@onready var _visual: Node2D = $Visual
+@onready var _body: Sprite2D = $Visual/Body
 
 
 func _ready() -> void:
-	_refresh_visual()
+	_apply_frame()
+
+
+func _process(delta: float) -> void:
+	_update_visual(delta)
 
 
 func _physics_process(delta: float) -> void:
@@ -76,15 +67,16 @@ func _move() -> void:
 		return
 
 	# Oito direções: o ângulo do joystick é arredondado para múltiplos de 45 graus.
-	var new_index := posmod(roundi(input.angle() / (PI / 4.0)), 8)
-	var dir := Vector2.from_angle(new_index * PI / 4.0)
+	direction_index = posmod(roundi(input.angle() / (PI / 4.0)), 8)
+	var dir := Vector2.from_angle(direction_index * PI / 4.0)
+	_facing = dir
+	if dir.x < -0.1:
+		_facing_left = true
+	elif dir.x > 0.1:
+		_facing_left = false
 
 	var running := strength >= run_threshold
 	velocity = dir * (run_speed if running else walk_speed)
-
-	if new_index != direction_index:
-		direction_index = new_index
-		_refresh_visual()
 	_set_state(State.RUN if running else State.WALK)
 
 
@@ -109,6 +101,12 @@ func revive() -> void:
 		_set_state(State.IDLE)
 
 
+func set_character_frame(frame: int) -> void:
+	character_frame = frame
+	if is_node_ready():
+		_apply_frame()
+
+
 func _set_state(new_state: int) -> void:
 	if new_state == state:
 		return
@@ -117,28 +115,55 @@ func _set_state(new_state: int) -> void:
 		_state_timer = attack_time
 	elif state == State.HURT:
 		_state_timer = hurt_time
-	_refresh_visual()
 	state_changed.emit(state)
 
 
-func _refresh_visual() -> void:
-	var anim_name: String = "%s_%s" % [STATE_NAMES[state], DIRECTION_NAMES[direction_index]]
-	if _sprite and _sprite.sprite_frames and _sprite.sprite_frames.has_animation(anim_name):
-		_sprite.play(anim_name)
-	queue_redraw()
+func _apply_frame() -> void:
+	var col := character_frame % FRAME_COLS
+	var row := character_frame / FRAME_COLS
+	_body.region_rect = Rect2(col * FRAME_SIZE, row * FRAME_SIZE, FRAME_SIZE, FRAME_SIZE)
 
 
-# Desenho provisório (sem arte): corpo colorido pelo estado e uma bolinha amarela na direção do olhar.
+# O personagem tem uma pose só, então os movimentos são feitos por código:
+# balanço ao andar e correr, avanço ao atacar, tremida ao levar dano e deitar ao morrer.
+func _update_visual(delta: float) -> void:
+	_anim_time += delta
+	var offset := Vector2.ZERO
+	var rot := 0.0
+	var scl := Vector2.ONE
+	var tint := Color.WHITE
+
+	match state:
+		State.IDLE:
+			scl.y = 1.0 + sin(_anim_time * 2.5) * 0.03
+		State.WALK:
+			var s := sin(_anim_time * 10.0)
+			offset.y = -absf(s) * 1.5
+			rot = s * 0.06
+		State.RUN:
+			var s := sin(_anim_time * 16.0)
+			offset.y = -absf(s) * 2.5
+			rot = s * 0.1
+		State.ATTACK:
+			var p := 1.0 - clampf(_state_timer / attack_time, 0.0, 1.0)
+			var k := sin(p * PI)
+			offset = _facing * k * 6.0
+			scl = Vector2(1.0 + k * 0.15, 1.0 - k * 0.1)
+			tint = Color(1.25, 1.0, 0.75)
+		State.HURT:
+			offset.x = sin(_anim_time * 60.0) * 1.5
+			tint = Color(1.0, 0.4, 0.4)
+		State.DEAD:
+			rot = PI / 2.0
+			tint = Color(0.5, 0.5, 0.55)
+
+	_visual.position = offset
+	_visual.rotation = rot
+	_visual.scale = scl
+	_body.flip_h = _facing_left
+	_body.modulate = tint
+
+
 func _draw() -> void:
-	if _sprite:
-		return
-	var color: Color = STATE_COLORS[state]
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.4))
-	draw_circle(Vector2.ZERO, 7.0, Color(0, 0, 0, 0.3))
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	if state == State.DEAD:
-		draw_rect(Rect2(-12, -8, 24, 10), color)
-		return
-	draw_rect(Rect2(-6, -22, 12, 22), color)
-	var facing := Vector2.from_angle(direction_index * PI / 4.0)
-	draw_circle(Vector2(0, -12) + facing * 5.0, 2.5, Color(1.0, 0.85, 0.2))
+	draw_set_transform(Vector2(0, -1), 0.0, Vector2(1.0, 0.4))
+	draw_circle(Vector2.ZERO, 6.0, Color(0, 0, 0, 0.3))
