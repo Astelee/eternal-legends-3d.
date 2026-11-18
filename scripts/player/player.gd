@@ -1,11 +1,14 @@
 class_name Player
-extends CharacterBody3D
+extends CharacterBody2D
 
 signal state_changed(new_state: int)
 
 enum State { IDLE, WALK, RUN, ATTACK, HURT, DEAD }
 
-const ANIM_NAMES := {
+# Índice 0 = direita, e segue no sentido horário (a tela tem o Y para baixo).
+const DIRECTION_NAMES := ["right", "down_right", "down", "down_left", "left", "up_left", "up", "up_right"]
+
+const STATE_NAMES := {
 	State.IDLE: "idle",
 	State.WALK: "walk",
 	State.RUN: "run",
@@ -23,79 +26,65 @@ const STATE_COLORS := {
 	State.DEAD: Color(0.3, 0.3, 0.3),
 }
 
-@export var walk_speed: float = 3.5
-@export var run_speed: float = 6.5
-@export var turn_speed: float = 14.0
-@export var gravity: float = 25.0
+@export var walk_speed: float = 45.0
+@export var run_speed: float = 80.0
 @export var run_threshold: float = 0.85
 @export var attack_time: float = 0.5
 @export var hurt_time: float = 0.4
+@export var world_limit: Rect2 = Rect2(-640, -640, 1280, 1280)
 
 var joystick: VirtualJoystick
-var camera_rig: IsoCameraRig
 var state: int = State.IDLE
+var direction_index: int = 2
 
 var _state_timer: float = 0.0
-var _body_material := StandardMaterial3D.new()
 
-@onready var _model: Node3D = $Model
-@onready var _body: MeshInstance3D = $Model/Body
-@onready var _anim: AnimationPlayer = get_node_or_null("AnimationPlayer")
+# Quando existir um AnimatedSprite2D filho, ele é usado no lugar do desenho provisório.
+# Nomes das animações: <estado>_<direção>, por exemplo walk_down_right.
+@onready var _sprite: AnimatedSprite2D = get_node_or_null("AnimatedSprite2D")
 
 
 func _ready() -> void:
-	_body.material_override = _body_material
-	_apply_state_visual()
+	_refresh_visual()
 
 
 func _physics_process(delta: float) -> void:
-	if not is_on_floor():
-		velocity.y -= gravity * delta
-	else:
-		velocity.y = 0.0
-
 	match state:
 		State.ATTACK, State.HURT:
-			velocity.x = 0.0
-			velocity.z = 0.0
+			velocity = Vector2.ZERO
 			_state_timer -= delta
 			if _state_timer <= 0.0:
 				_set_state(State.IDLE)
 		State.DEAD:
-			velocity.x = 0.0
-			velocity.z = 0.0
+			velocity = Vector2.ZERO
 		_:
-			_move(delta)
+			_move()
 
 	move_and_slide()
+	position = position.clamp(world_limit.position, world_limit.end)
 
 
-func _move(delta: float) -> void:
+func _move() -> void:
 	var input := Vector2.ZERO
 	if joystick:
 		input = joystick.output
 
 	var strength := input.length()
 	if strength < 0.01:
-		velocity.x = 0.0
-		velocity.z = 0.0
+		velocity = Vector2.ZERO
 		_set_state(State.IDLE)
 		return
 
 	# Oito direções: o ângulo do joystick é arredondado para múltiplos de 45 graus.
-	var snapped_angle := roundf(input.angle() / (PI / 4.0)) * (PI / 4.0)
-	var dir2 := Vector2.from_angle(snapped_angle)
-	var yaw := camera_rig.yaw_degrees if camera_rig else 0.0
-	var dir := Vector3(dir2.x, 0.0, dir2.y).rotated(Vector3.UP, deg_to_rad(yaw))
+	var new_index := posmod(roundi(input.angle() / (PI / 4.0)), 8)
+	var dir := Vector2.from_angle(new_index * PI / 4.0)
 
 	var running := strength >= run_threshold
-	var speed := run_speed if running else walk_speed
-	velocity.x = dir.x * speed
-	velocity.z = dir.z * speed
+	velocity = dir * (run_speed if running else walk_speed)
 
-	var target_yaw := atan2(dir.x, dir.z)
-	_model.rotation.y = lerp_angle(_model.rotation.y, target_yaw, clampf(turn_speed * delta, 0.0, 1.0))
-
+	if new_index != direction_index:
+		direction_index = new_index
+		_refresh_visual()
 	_set_state(State.RUN if running else State.WALK)
 
 
@@ -128,18 +117,28 @@ func _set_state(new_state: int) -> void:
 		_state_timer = attack_time
 	elif state == State.HURT:
 		_state_timer = hurt_time
-	_apply_state_visual()
+	_refresh_visual()
 	state_changed.emit(state)
 
 
-func _apply_state_visual() -> void:
-	var anim_name: String = ANIM_NAMES[state]
-	if _anim and _anim.has_animation(anim_name):
-		_anim.play(anim_name)
-	_body_material.albedo_color = STATE_COLORS[state]
+func _refresh_visual() -> void:
+	var anim_name: String = "%s_%s" % [STATE_NAMES[state], DIRECTION_NAMES[direction_index]]
+	if _sprite and _sprite.sprite_frames and _sprite.sprite_frames.has_animation(anim_name):
+		_sprite.play(anim_name)
+	queue_redraw()
+
+
+# Desenho provisório (sem arte): corpo colorido pelo estado e uma bolinha amarela na direção do olhar.
+func _draw() -> void:
+	if _sprite:
+		return
+	var color: Color = STATE_COLORS[state]
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.4))
+	draw_circle(Vector2.ZERO, 7.0, Color(0, 0, 0, 0.3))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if state == State.DEAD:
-		_model.rotation.x = deg_to_rad(90.0)
-		_model.position.y = 0.4
-	else:
-		_model.rotation.x = 0.0
-		_model.position.y = 0.9
+		draw_rect(Rect2(-12, -8, 24, 10), color)
+		return
+	draw_rect(Rect2(-6, -22, 12, 22), color)
+	var facing := Vector2.from_angle(direction_index * PI / 4.0)
+	draw_circle(Vector2(0, -12) + facing * 5.0, 2.5, Color(1.0, 0.85, 0.2))
