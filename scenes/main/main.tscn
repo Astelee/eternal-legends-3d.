@@ -3,15 +3,17 @@
 [ext_resource type="Script" path="res://scripts/main/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="2_player"]
 [ext_resource type="Script" path="res://scripts/ui/virtual_joystick.gd" id="3_joy"]
-[ext_resource type="Script" path="res://scripts/world/ground.gd" id="4_ground"]
+[ext_resource type="Script" path="res://scripts/world/town_map.gd" id="4_town"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
 
-[node name="Ground" type="Node2D" parent="."]
-script = ExtResource("4_ground")
+[node name="Town" type="Node2D" parent="."]
+y_sort_enabled = true
+script = ExtResource("4_town")
 
-[node name="Player" parent="." instance=ExtResource("2_player")]
+[node name="Player" parent="Town" instance=ExtResource("2_player")]
+position = Vector2(328, 272)
 
 [node name="UI" type="CanvasLayer" parent="."]
 
