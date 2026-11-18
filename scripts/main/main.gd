@@ -1,6 +1,6 @@
 extends Node2D
 
-@onready var _player: Player = $Player
+@onready var _player: Player = $Town/Player
 @onready var _joystick: VirtualJoystick = $UI/Joystick
 @onready var _info: Label = $UI/InfoLabel
 @onready var _attack_button: Button = $UI/Actions/AttackButton
@@ -18,7 +18,7 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	var state_name: String = Player.State.keys()[_player.state]
-	_info.text = "%s v%s | 2D | %s | FPS: %d" % [Game.GAME_NAME, Game.VERSION, state_name, Engine.get_frames_per_second()]
+	_info.text = "%s v%s | Cidade | %s | FPS: %d" % [Game.GAME_NAME, Game.VERSION, state_name, Engine.get_frames_per_second()]
 
 
 func _on_death_pressed() -> void:
