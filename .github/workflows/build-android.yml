@@ -1,0 +1,38 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  export-android:
+    runs-on: ubuntu-22.04
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preparar Godot
+        run: |
+          mkdir -p ~/.local/share/godot/export_templates ~/.config/godot
+          mv /root/.local/share/godot/export_templates/4.3.stable ~/.local/share/godot/export_templates/4.3.stable
+          cp -r /root/.config/godot/. ~/.config/godot/ || true
+
+      - name: Criar keystore de debug
+        run: |
+          keytool -keyalg RSA -genkeypair -alias androiddebugkey -keypass android -keystore debug.keystore -storepass android -dname "CN=Android Debug,O=Android,C=US" -validity 9999 -deststoretype pkcs12
+          mv debug.keystore /root/debug.keystore
+
+      - name: Importar recursos
+        run: godot --headless --import || true
+
+      - name: Exportar APK
+        run: |
+          mkdir -p build/android
+          godot --headless --verbose --export-debug "Android" build/android/eternal-legends.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: eternal-legends-apk
+          path: build/android/eternal-legends.apk
