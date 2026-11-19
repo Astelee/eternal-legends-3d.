@@ -4,18 +4,14 @@ extends Control
 # redondos (canto inferior direito) e painel de perfil (abre ao tocar no crachá).
 
 signal attack_pressed
-signal hurt_pressed
-signal death_pressed
+signal revive_pressed
 signal class_selected(frame: int)
 signal profile_opened
 
 const CHAR_TEX: Texture2D = preload("res://assets/characters/tiny_dungeon.png")
 const ICON_ATTACK: Texture2D = preload("res://assets/ui/icon_attack.png")
-const ICON_HURT: Texture2D = preload("res://assets/ui/icon_hurt.png")
-const ICON_DEATH: Texture2D = preload("res://assets/ui/icon_death.png")
 const ICON_REVIVE: Texture2D = preload("res://assets/ui/icon_revive.png")
 const COLS := 12
-const VIOLET := Color("#8a6ab8")
 
 var _badge_avatar: TextureRect
 var _badge_name: Label
@@ -23,9 +19,9 @@ var _badge_level: Label
 var _hp_bar: ProgressBar
 var _xp_bar: ProgressBar
 
-var _death_button: Button
-var _death_caption: Label
-var _dead: bool = false
+var _attack_button: Button
+var _revive_box: CenterContainer
+var _location_label: Label
 
 var _profile: Control
 var _profile_avatar: TextureRect
@@ -46,6 +42,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_build_badge()
 	_build_actions()
+	_build_location()
 	_build_profile_panel()
 	Game.profile_changed.connect(_refresh_profile)
 	_refresh_profile()
@@ -63,17 +60,20 @@ func set_hp(hp: int, max_hp: int) -> void:
 
 
 func set_dead(dead: bool) -> void:
-	_dead = dead
-	if _death_button == null:
+	if _revive_box:
+		_revive_box.visible = dead
+	if _attack_button:
+		_attack_button.disabled = dead
+
+
+func set_location(text: String) -> void:
+	if _location_label == null:
 		return
-	if dead:
-		_style_round(_death_button, GameTheme.LIFE, 100, 64)
-		_death_button.icon = ICON_REVIVE
-		_death_caption.text = "Reviver"
-	else:
-		_style_round(_death_button, VIOLET, 100, 64)
-		_death_button.icon = ICON_DEATH
-		_death_caption.text = "Morrer"
+	_location_label.text = text
+	_location_label.modulate.a = 1.0
+	var tw := create_tween()
+	tw.tween_interval(2.5)
+	tw.tween_property(_location_label, "modulate:a", 0.35, 1.0)
 
 
 # ---------------------------------------------------------------- crachá de perfil
@@ -147,22 +147,65 @@ func _build_actions() -> void:
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(box)
 	box.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	box.offset_left = -380.0
-	box.offset_top = -360.0
+	box.offset_left = -260.0
+	box.offset_top = -240.0
 	box.offset_right = -20.0
 	box.offset_bottom = -20.0
 	box.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	box.grow_vertical = Control.GROW_DIRECTION_BEGIN
 
-	var attack := _make_round_button(box, ICON_ATTACK, GameTheme.GOLD, Vector2(210, 180), 150, 96, "Atacar")
-	attack.pressed.connect(func() -> void: attack_pressed.emit())
+	_attack_button = _make_round_button(box, ICON_ATTACK, GameTheme.GOLD, Vector2(70, 20), 150, 96, "Atacar")
+	_attack_button.pressed.connect(func() -> void: attack_pressed.emit())
 
-	var hurt := _make_round_button(box, ICON_HURT, GameTheme.BLOOD, Vector2(90, 230), 100, 64, "Dano")
-	hurt.pressed.connect(func() -> void: hurt_pressed.emit())
+	_build_revive_overlay()
 
-	_death_button = _make_round_button(box, ICON_DEATH, VIOLET, Vector2(250, 40), 100, 64, "Morrer")
-	_death_caption = _death_button.get_meta("caption") as Label
-	_death_button.pressed.connect(func() -> void: death_pressed.emit())
+
+# Só aparece quando o personagem morre em luta.
+func _build_revive_overlay() -> void:
+	_revive_box = CenterContainer.new()
+	_revive_box.visible = false
+	_revive_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_revive_box)
+	_revive_box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", GameTheme.box(Color(0.08, 0.04, 0.06, 0.94), GameTheme.BLOOD, 4, 12, 20))
+	_revive_box.add_child(panel)
+
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 14)
+	panel.add_child(v)
+
+	var title := Label.new()
+	title.text = "VOCÊ CAIU EM BATALHA"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 32)
+	title.add_theme_color_override("font_color", Color("#e0605a"))
+	v.add_child(title)
+
+	var b := Button.new()
+	b.text = "Reviver"
+	b.icon = ICON_REVIVE
+	b.expand_icon = true
+	b.add_theme_constant_override("icon_max_width", 48)
+	b.custom_minimum_size = Vector2(320, 72)
+	b.focus_mode = Control.FOCUS_NONE
+	b.pressed.connect(func() -> void: revive_pressed.emit())
+	v.add_child(b)
+
+
+func _build_location() -> void:
+	_location_label = Label.new()
+	_location_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_location_label.add_theme_font_size_override("font_size", 28)
+	_location_label.add_theme_color_override("font_color", GameTheme.GOLD_LIGHT)
+	_location_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_location_label)
+	_location_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_location_label.offset_left = -220.0
+	_location_label.offset_right = 220.0
+	_location_label.offset_top = 56.0
+	_location_label.offset_bottom = 96.0
 
 
 func _make_round_button(parent: Control, icon: Texture2D, accent: Color, pos: Vector2, size: int, icon_px: int, caption: String) -> Button:
