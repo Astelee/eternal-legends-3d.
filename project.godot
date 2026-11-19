@@ -3,8 +3,13 @@ config_version=5
 [application]
 
 config/name="Eternal Legends"
-run/main_scene="res://scenes/main/main.tscn"
+run/main_scene="res://scenes/login/login_screen.tscn"
 config/features=PackedStringArray("4.3", "GL Compatibility")
+
+[eternal_legends]
+
+auth/base_url=""
+news/url=""
 
 [autoload]
 
