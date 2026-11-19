@@ -1,9 +1,26 @@
 extends Node2D
 
-@onready var _player: Player = $Town/Player
+const TOWN_MAP := preload("res://scripts/world/town_map.gd")
+const DUNGEON_MAP := preload("res://scripts/world/dungeon_map.gd")
+const CARD_ART: Texture2D = preload("res://assets/ui/dungeon_cards.png")
+
+# Imagem mostrada na tela de transição (recorte de 128x128 do dungeon_cards.png).
+const CARDS := {
+	"town": {"region": Rect2(128, 256, 128, 128), "title": "Vila Inicial"},
+	"dungeon": {"region": Rect2(384, 256, 128, 128), "title": "Masmorra Esquecida"}
+}
+
+@onready var _player: Player = $Player
+@onready var _world: Node2D = $World
 @onready var _joystick: VirtualJoystick = $UI/Joystick
 @onready var _info: Label = $UI/InfoLabel
 @onready var _hud: Hud = $UI/Hud
+
+var _map: GameMap
+var _busy: bool = false
+var _fade: ColorRect
+var _card: TextureRect
+var _card_label: Label
 
 
 func _ready() -> void:
@@ -11,8 +28,7 @@ func _ready() -> void:
 	_player.set_character_frame(Game.class_frame)
 
 	_hud.attack_pressed.connect(_player.attack)
-	_hud.hurt_pressed.connect(_player.take_hit)
-	_hud.death_pressed.connect(_on_death_pressed)
+	_hud.revive_pressed.connect(_on_revive_pressed)
 	_hud.class_selected.connect(_player.set_character_frame)
 	_hud.profile_opened.connect(_joystick.reset_input)
 
@@ -20,17 +36,104 @@ func _ready() -> void:
 	_player.state_changed.connect(_on_player_state_changed)
 	_hud.set_hp(_player.hp, _player.max_hp)
 
+	_build_fade()
+	_load_map("town", "default")
+
 
 func _process(_delta: float) -> void:
 	var state_name: String = Player.State.keys()[_player.state]
 	_info.text = "%s v%s | %s | FPS: %d" % [Game.GAME_NAME, Game.VERSION, state_name, Engine.get_frames_per_second()]
 
 
-func _on_death_pressed() -> void:
-	if _player.state == Player.State.DEAD:
-		_player.revive()
-	else:
-		_player.die()
+# ------------------------------------------------------------------ mapas
+
+func _make_map(id: String) -> GameMap:
+	if id == "dungeon":
+		return DUNGEON_MAP.new()
+	return TOWN_MAP.new()
+
+
+func _load_map(id: String, from_id: String) -> void:
+	var map := _make_map(id)
+	_world.add_child(map)
+	_player.reparent(map, false)
+	_player.set_world(map.world_limit)
+	_player.teleport(map.get_spawn(from_id))
+	if _map != null:
+		_map.queue_free()
+	_map = map
+	map.portal_used.connect(_on_portal_used)
+	_hud.set_location(map.title)
+
+
+func _on_portal_used(target: String, from_id: String) -> void:
+	if _busy:
+		return
+	_busy = true
+	_player.set_physics_process(false)
+	var card: Dictionary = CARDS.get(target, CARDS["town"])
+	var atlas := AtlasTexture.new()
+	atlas.atlas = CARD_ART
+	atlas.region = card["region"]
+	_card.texture = atlas
+	_card_label.text = card["title"]
+	await _fade_to(true)
+	_load_map(target, from_id)
+	await get_tree().create_timer(0.9).timeout
+	await _fade_to(false)
+	_player.set_physics_process(true)
+	_busy = false
+
+
+func _fade_to(on: bool) -> void:
+	_fade.visible = true
+	var tw := create_tween()
+	tw.tween_property(_fade, "modulate:a", 1.0 if on else 0.0, 0.3)
+	await tw.finished
+	if not on:
+		_fade.visible = false
+
+
+func _build_fade() -> void:
+	var layer := CanvasLayer.new()
+	layer.layer = 10
+	add_child(layer)
+
+	_fade = ColorRect.new()
+	_fade.color = Color("#0c0910")
+	_fade.visible = false
+	_fade.modulate.a = 0.0
+	layer.add_child(_fade)
+	_fade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+	var center := CenterContainer.new()
+	_fade.add_child(center)
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 16)
+	center.add_child(box)
+
+	_card = TextureRect.new()
+	_card.custom_minimum_size = Vector2(384, 384)
+	_card.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_card.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	box.add_child(_card)
+
+	_card_label = Label.new()
+	_card_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_card_label.add_theme_font_size_override("font_size", 34)
+	_card_label.add_theme_color_override("font_color", Color("#f2dc94"))
+	_card_label.add_theme_color_override("font_outline_color", Color("#14101a"))
+	_card_label.add_theme_constant_override("outline_size", 6)
+	box.add_child(_card_label)
+
+
+# ------------------------------------------------------------------ jogador
+
+func _on_revive_pressed() -> void:
+	_player.revive()
+	_player.teleport(_map.get_spawn("default"))
 
 
 func _on_player_state_changed(new_state: int) -> void:
