@@ -439,3 +439,44 @@ if __name__ == "__main__":
     make_shine()
     make_logo()
     print("assets gerados em", OUT)
+
+
+# ------------------------------------------------------------------ barra de progresso (splash)
+def make_bar():
+    n = 16
+    frame = Image.new("RGBA", (n, n), (0, 0, 0, 0))
+    fp = frame.load()
+    for y in range(n):
+        for x in range(n):
+            if (x, y) in ((0, 0), (n - 1, 0), (0, n - 1), (n - 1, n - 1)):
+                continue
+            d = min(x, y, n - 1 - x, n - 1 - y)
+            if d == 0:
+                c = hexc("#140d08")
+            elif d == 1:
+                c = hexc("#f2dc94") if y < n // 2 else hexc("#c8942e")
+            elif d == 2:
+                c = hexc("#8a6428")
+            elif d == 3:
+                c = hexc("#140d08")
+            else:
+                c = hexc("#080a1c", 235)
+            fp[x, y] = c
+    save(frame, "bar_frame", 2)
+    fill = Image.new("RGBA", (n, n), (0, 0, 0, 0))
+    lp = fill.load()
+    for y in range(n):
+        t = y / float(n - 1)
+        if y == 0:
+            c = hexc("#d8f2ff")
+        elif y == 1:
+            c = hexc("#8fd6ff")
+        else:
+            c = lerp(hexc("#3a9bf0"), hexc("#154f9e"), t)
+        for x in range(n):
+            lp[x, y] = c
+    save(fill, "bar_fill", 2)
+
+
+if __name__ == "__main__":
+    make_bar()
