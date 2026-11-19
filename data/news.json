@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "_comment": "CONTEUDO DEMONSTRATIVO. Todos os itens abaixo sao exemplos (is_demo = true) ate existir o painel administrativo de noticias. Para usar a API, defina eternal_legends/news/url no project.godot.",
+  "items": [
+    {
+      "id": "exemplo-001",
+      "category": "update",
+      "title": "Exemplo: título de uma atualização do jogo",
+      "published_at": "2026-11-18",
+      "summary": "Resumo curto da atualização. Este é apenas um texto de exemplo para mostrar o layout.",
+      "body": "Este é um item de demonstração.\n\nQuando o painel administrativo estiver pronto, as notícias reais serão carregadas no lugar destes exemplos, sem alterar o layout da tela.",
+      "is_demo": true
+    },
+    {
+      "id": "exemplo-002",
+      "category": "content",
+      "title": "Exemplo: anúncio de novo conteúdo",
+      "published_at": "2026-11-16",
+      "summary": "Espaço para apresentar novas áreas, itens ou masmorras. Texto de exemplo.",
+      "body": "Este é um item de demonstração para a categoria de novo conteúdo.\n\nUse o campo body para textos longos; parágrafos são separados por uma linha em branco.",
+      "is_demo": true
+    },
+    {
+      "id": "exemplo-003",
+      "category": "event",
+      "title": "Exemplo: evento especial",
+      "published_at": "2026-11-14",
+      "summary": "Espaço para datas, recompensas e regras de um evento. Texto de exemplo.",
+      "body": "Este é um item de demonstração para a categoria de eventos.",
+      "is_demo": true
+    },
+    {
+      "id": "exemplo-004",
+      "category": "fix",
+      "title": "Exemplo: correções de bugs",
+      "published_at": "2026-11-12",
+      "summary": "Espaço para listar problemas corrigidos. Texto de exemplo.",
+      "body": "Este é um item de demonstração para a categoria de correções.",
+      "is_demo": true
+    },
+    {
+      "id": "exemplo-005",
+      "category": "maintenance",
+      "title": "Exemplo: manutenção programada",
+      "published_at": "2026-11-10",
+      "summary": "Espaço para avisar data, horário e duração de uma manutenção. Texto de exemplo.",
+      "body": "Este é um item de demonstração para a categoria de manutenção.",
+      "is_demo": true
+    },
+    {
+      "id": "exemplo-006",
+      "category": "notice",
+      "title": "Exemplo: aviso importante",
+      "published_at": "2026-11-08",
+      "summary": "Espaço para comunicados gerais aos jogadores. Texto de exemplo.",
+      "body": "Este é um item de demonstração para a categoria de avisos.",
+      "is_demo": true
+    }
+  ]
+}
