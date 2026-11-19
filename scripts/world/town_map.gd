@@ -11,7 +11,7 @@ const CHARACTER_TEXTURE: Texture2D = preload("res://assets/characters/tiny_dunge
 # Peças que bloqueiam o jogador (árvores, casas, cercas, objetos).
 const BLOCKED := [3, 4, 5, 15, 16, 27, 28, 48, 49, 50, 51, 52, 53, 54, 55, 60, 61, 62, 63, 64, 65, 66, 67, 72, 73, 74, 75, 76, 77, 78, 79, 84, 85, 86, 87, 88, 89, 90, 91, 80, 81, 82, 83, 94, 95, 104]
 
-# Personagens parados na cidade: "frame" é o índice em assets/characters/tiny_dungeon.png.
+# Personagens da cidade (passeiam perto do ponto inicial): "frame" é o índice em assets/characters/tiny_dungeon.png.
 const NPCS := [
 	{"frame": 85, "tile": Vector2i(18, 15)},
 	{"frame": 86, "tile": Vector2i(23, 15)},
@@ -136,22 +136,10 @@ func _paint(layer: TileMapLayer, rows: Array) -> void:
 
 
 func _spawn_npcs() -> void:
-	for npc in NPCS:
-		var frame: int = npc["frame"]
-		var cell: Vector2i = npc["tile"]
-		var body := StaticBody2D.new()
-		body.position = Vector2(cell.x * TILE + 8, cell.y * TILE + 16)
-		var sprite := Sprite2D.new()
-		sprite.texture = CHARACTER_TEXTURE
-		sprite.region_enabled = true
-		sprite.region_rect = Rect2((frame % COLS) * TILE, (frame / COLS) * TILE, TILE, TILE)
-		sprite.centered = false
-		sprite.offset = Vector2(-8, -16)
-		body.add_child(sprite)
-		var shape := CollisionShape2D.new()
-		var circle := CircleShape2D.new()
-		circle.radius = 5.0
-		shape.shape = circle
-		shape.position = Vector2(0, -4)
-		body.add_child(shape)
-		add_child(body)
+	for data in NPCS:
+		var cell: Vector2i = data["tile"]
+		var npc := Npc.new()
+		npc.texture = CHARACTER_TEXTURE
+		npc.frame = data["frame"]
+		npc.position = Vector2(cell.x * TILE + 8, cell.y * TILE + 16)
+		add_child(npc)
