@@ -403,9 +403,9 @@ func _update_content_scale() -> void:
 # ------------------------------------------------------------------ animações
 
 func _start_intro() -> void:
-	await get_tree().process_frame
-	_layout()
 	if not Motion.on():
+		await get_tree().process_frame
+		_layout()
 		_login_form.focus_first_empty()
 		return
 
@@ -421,6 +421,12 @@ func _start_intro() -> void:
 	_bottom.modulate.a = 0.0
 	for it in items:
 		(it as Control).modulate.a = 0.0
+	_apply_offsets()
+
+	# O estado inicial (escondido) é aplicado ANTES de esperar o quadro, para a
+	# tela de login nunca aparecer completa por um instante (a "piscada").
+	await get_tree().process_frame
+	_layout()
 
 	var tw := create_tween().set_parallel(true)
 	tw.tween_property(_bg, "modulate", Color.WHITE, 1.1)
