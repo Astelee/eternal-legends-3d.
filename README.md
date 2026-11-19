@@ -1,1 +1,1 @@
-# eternal-legends-3d.
+# eternal-legends-2D
