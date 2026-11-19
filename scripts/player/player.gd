@@ -2,6 +2,7 @@ class_name Player
 extends CharacterBody2D
 
 signal state_changed(new_state: int)
+signal hp_changed(hp: int, max_hp: int)
 
 enum State { IDLE, WALK, RUN, ATTACK, HURT, DEAD }
 
@@ -16,6 +17,8 @@ const FRAME_SIZE := 16
 @export var run_threshold: float = 0.85
 @export var attack_time: float = 0.5
 @export var hurt_time: float = 0.4
+@export var max_hp: int = 100
+@export var hit_damage: int = 15
 @export var world_limit: Rect2 = Rect2(0, 0, 640, 480)
 
 var joystick: VirtualJoystick
@@ -26,13 +29,19 @@ var _state_timer: float = 0.0
 var _anim_time: float = 0.0
 var _facing: Vector2 = Vector2.DOWN
 var _facing_left: bool = false
+var _step_timer: float = 0.0
+
+var hp: int = 100
 
 @onready var _visual: Node2D = $Visual
 @onready var _body: Sprite2D = $Visual/Body
 
 
 func _ready() -> void:
+	add_to_group("player")
+	hp = max_hp
 	_apply_frame()
+	hp_changed.emit(hp, max_hp)
 
 
 func _process(delta: float) -> void:
@@ -79,25 +88,48 @@ func _move() -> void:
 	velocity = dir * (run_speed if running else walk_speed)
 	_set_state(State.RUN if running else State.WALK)
 
+	_step_timer -= get_physics_process_delta_time()
+	if _step_timer <= 0.0:
+		_step_timer = 0.22 if running else 0.34
+		Audio.play_sfx("step", 0.15)
+
 
 func attack() -> void:
 	if state == State.DEAD or state == State.ATTACK:
 		return
 	_set_state(State.ATTACK)
+	Audio.play_sfx("attack", 0.08)
+	# XP provisório até existirem inimigos: cada ataque rende um pouco.
+	if Game.add_xp(3):
+		Audio.play_sfx("levelup")
 
 
 func take_hit() -> void:
 	if state == State.DEAD:
 		return
+	hp = maxi(hp - hit_damage, 0)
+	hp_changed.emit(hp, max_hp)
+	if hp == 0:
+		die()
+		return
+	Audio.play_sfx("hurt", 0.05)
 	_set_state(State.HURT)
 
 
 func die() -> void:
+	if state == State.DEAD:
+		return
+	hp = 0
+	hp_changed.emit(hp, max_hp)
+	Audio.play_sfx("death")
 	_set_state(State.DEAD)
 
 
 func revive() -> void:
 	if state == State.DEAD:
+		hp = max_hp
+		hp_changed.emit(hp, max_hp)
+		Audio.play_sfx("revive")
 		_set_state(State.IDLE)
 
 
