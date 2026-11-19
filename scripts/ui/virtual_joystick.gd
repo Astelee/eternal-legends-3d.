@@ -36,8 +36,24 @@ func _reset() -> void:
 	queue_redraw()
 
 
+func reset_input() -> void:
+	_reset()
+
+
 func _draw() -> void:
 	var center := size / 2.0
-	draw_circle(center, radius + 20.0, Color(1, 1, 1, 0.12))
-	draw_arc(center, radius + 20.0, 0.0, TAU, 48, Color(1, 1, 1, 0.45), 3.0)
-	draw_circle(center + _knob_offset, 46.0, Color(1, 1, 1, 0.55))
+	var ring := radius + 20.0
+	# Base: pedra escura com anel dourado
+	draw_circle(center, ring, Color(0.08, 0.06, 0.10, 0.45))
+	draw_arc(center, ring, 0.0, TAU, 64, Color(0.83, 0.66, 0.29, 0.75), 4.0, true)
+	draw_arc(center, ring - 8.0, 0.0, TAU, 64, Color(0.43, 0.32, 0.14, 0.6), 2.0, true)
+	# Marcas nos quatro cantos
+	for i in 4:
+		var a := i * PI / 2.0
+		draw_circle(center + Vector2.from_angle(a) * (ring - 4.0), 5.0, Color(0.95, 0.86, 0.58, 0.8))
+	# Manopla
+	var knob := center + _knob_offset
+	draw_circle(knob + Vector2(0, 4), 46.0, Color(0, 0, 0, 0.35))
+	draw_circle(knob, 46.0, Color(0.23, 0.19, 0.27, 0.95))
+	draw_arc(knob, 44.0, 0.0, TAU, 48, Color(0.83, 0.66, 0.29, 1.0), 5.0, true)
+	draw_circle(knob, 14.0, Color(0.95, 0.86, 0.58, 0.9))
