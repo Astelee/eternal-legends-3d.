@@ -1,4 +1,4 @@
-extends Node2D
+extends GameMap
 
 # Cidade inicial montada com as peças do Tiny Town (Kenney, CC0).
 # Cada número é o índice da peça em assets/tiles/tiny_town.png (12 colunas, peças de 16x16). -1 = vazio.
@@ -87,12 +87,17 @@ const OBJECTS := [
 
 
 func _ready() -> void:
+	map_id = "town"
+	title = "Vila Inicial"
+	world_limit = Rect2(0, 0, TILE * 40, TILE * 30)
+	spawn_points = {"default": Vector2(328, 272), "dungeon": Vector2(328, 416)}
 	var tile_set := _build_tile_set()
 	var ground := _make_layer("Ground", tile_set)
 	var objects := _make_layer("Objects", tile_set)
 	_paint(ground, GROUND)
 	_paint(objects, OBJECTS)
 	_spawn_npcs()
+	_spawn_portal()
 
 
 func _build_tile_set() -> TileSet:
@@ -143,3 +148,15 @@ func _spawn_npcs() -> void:
 		npc.frame = data["frame"]
 		npc.position = Vector2(cell.x * TILE + 8, cell.y * TILE + 16)
 		add_child(npc)
+
+
+# Porta da masmorra no fim da estrada, ao sul.
+func _spawn_portal() -> void:
+	var portal := Portal.new()
+	portal.texture = CHARACTER_TEXTURE
+	portal.frame = 45
+	portal.target = "dungeon"
+	portal.caption = "Masmorra"
+	portal.position = Vector2(20 * TILE + 8, 27 * TILE + 16)
+	portal.used.connect(func(t: String) -> void: portal_used.emit(t, map_id))
+	add_child(portal)
