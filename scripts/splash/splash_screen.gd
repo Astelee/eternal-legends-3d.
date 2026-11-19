@@ -55,6 +55,7 @@ func _ready() -> void:
 	_start_jobs()
 	resized.connect(_layout)
 	_layout()
+	_layout.call_deferred()
 	_intro()
 
 
@@ -303,7 +304,7 @@ func _status_row() -> Control:
 	row.add_child(_ornament_line())
 	_status = LoginTheme.label("Carregando seu mundo...", 26, LoginTheme.PARCHMENT)
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_status.autowrap_mode = TextServer.AUTOWRAP_OFF
 	_status.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	row.add_child(_status)
 	row.add_child(_ornament_line())
