@@ -14,7 +14,9 @@ const SFX := {
 	"step": "res://assets/audio/sfx_step.ogg",
 	"click": "res://assets/audio/sfx_click.ogg",
 	"open": "res://assets/audio/sfx_open.ogg",
-	"close": "res://assets/audio/sfx_close.ogg"
+	"close": "res://assets/audio/sfx_close.ogg",
+	"hit": "res://assets/audio/sfx_hit.ogg",
+	"enemy_die": "res://assets/audio/sfx_enemy_die.ogg"
 }
 const SFX_VOICES := 6
 
