@@ -9,7 +9,7 @@ const CARD_ART: Texture2D = preload("res://assets/ui/dungeon_cards.png")
 const CARDS := {
 	"town": {"region": Rect2(128, 256, 128, 128), "title": "Vila Inicial"},
 	"dungeon": {"region": Rect2(384, 256, 128, 128), "title": "Masmorra Esquecida"},
-	"tutorial": {"region": Rect2(128, 256, 128, 128), "title": "Clareira do Despertar"}
+	"tutorial": {"region": Rect2(384, 256, 128, 128), "title": "Ruínas Esquecidas"}
 }
 
 @onready var _player: Player = $Player
@@ -49,6 +49,7 @@ func _ready() -> void:
 	_hud.set_hp(_player.hp, _player.max_hp)
 
 	_build_fade()
+	get_viewport().size_changed.connect(_on_viewport_resized)
 	# Quem ainda não fez o tutorial começa nele; a vila só abre depois de concluí-lo.
 	_load_map("tutorial" if not Game.is_tutorial_done() else "town", "default")
 
@@ -77,6 +78,7 @@ func _load_map(id: String, from_id: String) -> void:
 	_world.add_child(map)
 	_player.reparent(map, false)
 	_player.set_world(map.world_limit)
+	_apply_camera(map)
 	_player.teleport(map.get_spawn(from_id))
 	if _map != null:
 		_map.queue_free()
@@ -91,6 +93,30 @@ func _load_map(id: String, from_id: String) -> void:
 		_tutorial = TutorialController.new()
 		add_child(_tutorial)
 		_tutorial.setup(_player, _hud, map as TutorialMap, _joystick)
+
+
+# Ajusta o zoom da câmera ao mapa. Mapas de tela única (tutorial) ficam com a câmera parada,
+# centralizada na sala, mesmo em telas mais largas ou mais altas.
+func _apply_camera(map: GameMap) -> void:
+	var cam := _player.get_node("Camera2D") as Camera2D
+	if cam == null:
+		return
+	cam.zoom = Vector2(map.camera_zoom, map.camera_zoom)
+	if not map.camera_fixed:
+		return
+	var rect := map.world_limit
+	var view := get_viewport_rect().size / map.camera_zoom
+	var extra_x := maxf(view.x - rect.size.x, 0.0) / 2.0
+	var extra_y := maxf(view.y - rect.size.y, 0.0) / 2.0
+	cam.limit_left = int(floor(rect.position.x - extra_x))
+	cam.limit_right = int(ceil(rect.end.x + extra_x))
+	cam.limit_top = int(floor(rect.position.y - extra_y))
+	cam.limit_bottom = int(ceil(rect.end.y + extra_y))
+
+
+func _on_viewport_resized() -> void:
+	if _map != null and is_instance_valid(_map):
+		_apply_camera(_map)
 
 
 func _on_portal_used(target: String, from_id: String) -> void:
