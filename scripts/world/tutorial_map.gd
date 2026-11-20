@@ -27,18 +27,18 @@ const ROOMS := [
 	},
 	{
 		"title": "Pátio dos Primeiros Inimigos",
-		"walk": [Vector2(560, 232), Vector2(655, 215), Vector2(655, 120), Vector2(745, 120), Vector2(745, 215), Vector2(815, 235), Vector2(900, 300), Vector2(1000, 320), Vector2(1090, 330), Vector2(1150, 345), Vector2(1230, 360), Vector2(1230, 560), Vector2(1000, 575), Vector2(955, 640), Vector2(950, 819), Vector2(705, 819), Vector2(700, 640), Vector2(660, 640), Vector2(612, 625), Vector2(600, 560), Vector2(570, 520), Vector2(540, 470), Vector2(450, 450), Vector2(400, 430), Vector2(330, 380), Vector2(300, 330), Vector2(340, 300), Vector2(420, 260)],
+		"walk": [Vector2(560, 232), Vector2(655, 215), Vector2(745, 215), Vector2(815, 235), Vector2(900, 300), Vector2(1000, 320), Vector2(1090, 330), Vector2(1150, 345), Vector2(1230, 360), Vector2(1230, 560), Vector2(1000, 575), Vector2(955, 640), Vector2(950, 819), Vector2(705, 819), Vector2(700, 640), Vector2(660, 640), Vector2(612, 625), Vector2(600, 560), Vector2(570, 520), Vector2(540, 470), Vector2(450, 450), Vector2(400, 430), Vector2(330, 380), Vector2(300, 330), Vector2(340, 300), Vector2(420, 260)],
 		"holes": [[Vector2(930, 420), Vector2(1060, 395), Vector2(1135, 395), Vector2(1135, 455), Vector2(1230, 455), Vector2(1230, 535), Vector2(1130, 535), Vector2(1100, 500), Vector2(930, 500)]],
 		"spawn": Vector2(830, 775),
-		"gate": {"pos": Vector2(700, 160), "size": Vector2(110, 44), "target": 3, "caption": "Passagem"},
+		"gate": {"pos": Vector2(700, 238), "size": Vector2(110, 40), "target": 3, "caption": "Passagem"},
 		"points": {"fight": Vector2(780, 440), "fight_a": Vector2(600, 390), "fight_b": Vector2(900, 350), "skill": Vector2(780, 470), "skill_a": Vector2(560, 430), "skill_b": Vector2(780, 330), "skill_c": Vector2(960, 370), "potion": Vector2(700, 560), "potion2": Vector2(520, 380)}
 	},
 	{
 		"title": "Corredores Subterrâneos",
-		"walk": [Vector2(200, 150), Vector2(330, 150), Vector2(330, 350), Vector2(1050, 350), Vector2(1050, 300), Vector2(1400, 300), Vector2(1400, 430), Vector2(840, 430), Vector2(840, 575), Vector2(810, 575), Vector2(810, 665), Vector2(590, 665), Vector2(590, 575), Vector2(500, 575), Vector2(500, 430), Vector2(60, 430), Vector2(60, 350), Vector2(200, 350)],
+		"walk": [Vector2(200, 150), Vector2(330, 150), Vector2(330, 350), Vector2(1050, 350), Vector2(1050, 300), Vector2(1400, 300), Vector2(1400, 430), Vector2(840, 430), Vector2(840, 575), Vector2(590, 575), Vector2(500, 575), Vector2(500, 430), Vector2(60, 430), Vector2(60, 350), Vector2(200, 350)],
 		"holes": [],
 		"spawn": Vector2(265, 210),
-		"gate": {"pos": Vector2(700, 645), "size": Vector2(150, 40), "target": 4, "caption": "Portão"},
+		"gate": {"pos": Vector2(700, 552), "size": Vector2(150, 36), "target": 4, "caption": "Portão"},
 		"points": {"trial": Vector2(700, 500), "a": Vector2(500, 390), "b": Vector2(900, 385), "c": Vector2(700, 500), "potion": Vector2(640, 500), "potion2": Vector2(1000, 395)}
 	},
 	{
