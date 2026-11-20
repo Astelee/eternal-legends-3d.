@@ -48,6 +48,22 @@ func _ready() -> void:
 	_refresh_profile()
 
 
+func _input(event: InputEvent) -> void:
+	if not (event is InputEventScreenTouch) or not event.pressed:
+		return
+	if _attack_button == null or _attack_button.disabled or _profile.visible:
+		return
+	if _attack_button.get_global_rect().has_point(event.position):
+		attack_pressed.emit()
+		_flash_attack_button()
+
+
+func _flash_attack_button() -> void:
+	_attack_button.modulate = Color(1.4, 1.4, 1.4)
+	var tw := create_tween()
+	tw.tween_property(_attack_button, "modulate", Color.WHITE, 0.15)
+
+
 # ---------------------------------------------------------------- API pública
 
 func set_hp(hp: int, max_hp: int) -> void:
@@ -155,7 +171,8 @@ func _build_actions() -> void:
 	box.grow_vertical = Control.GROW_DIRECTION_BEGIN
 
 	_attack_button = _make_round_button(box, ICON_ATTACK, GameTheme.GOLD, Vector2(70, 20), 150, 96, "Atacar")
-	_attack_button.pressed.connect(func() -> void: attack_pressed.emit())
+	# O ataque é disparado por _input (toque direto), não pelo sinal "pressed" do Button:
+	# o Button só enxerga o primeiro dedo, então não respondia com o joystick em uso.
 
 	_build_revive_overlay()
 
