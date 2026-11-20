@@ -1,9 +1,15 @@
 class_name TutorialController
 extends Node
-# Conduz o tutorial: história de abertura, falas do Ancião Aldric, objetivos na tela e
-# missões práticas (mover, atacar, habilidade, perfil, desafio final). As explicações de
-# combate mudam conforme a classe da conta. Ao concluir, grava o progresso e abre o
-# portal para a Vila Inicial.
+# Conduz o tutorial nas Ruínas Esquecidas: história de abertura, falas do Ancião Aldric,
+# objetivos na tela e as missões práticas, sala por sala:
+#   1 Entrada das Ruínas  - andar e conhecer o perfil
+#   2 Pátio dos Primeiros Inimigos - atacar e usar a habilidade
+#   3 Corredores Subterrâneos - sobreviver com frascos de vida
+#   4 Salão dos Guardiões - guardiões e o Golem (círculo vermelho de aviso)
+#   5 Arena do Chefe - Senhor Demônio
+#   6 Câmara Final - Senhor das Trevas (último chefe)
+# As explicações de combate mudam conforme a classe da conta. Ao vencer o último chefe,
+# grava o progresso e abre o portal para a Vila Inicial.
 
 signal finished
 
@@ -14,7 +20,7 @@ const STORY := [
 	"Então a Noite Sem Fim despertou. O cristal se partiu em fragmentos e criaturas sombrias começaram a surgir das ruínas.",
 	"Heróis de todo o reino marcham para recuperar os fragmentos e reacender a Chama Eterna. Poucos retornam.",
 	"%CLASS%",
-	"Você acorda numa clareira diante das muralhas da Vila Inicial, ferido e sem lembranças. Um velho se aproxima..."
+	"Você acorda diante dos portões das Ruínas Esquecidas, ferido e sem lembranças. Um velho se aproxima..."
 ]
 
 const STORY_CLASS := {
@@ -24,9 +30,9 @@ const STORY_CLASS := {
 }
 
 const TEXT_ATTACK := {
-	"warrior": "Slimes! Toque em ESPADA (botão grande, canto inferior direito) para golpear. A espada acerta quem está perto, na direção em que você olha. Aproxime-se e corte!",
-	"archer": "Slimes! Toque em FLECHA (botão grande, canto inferior direito) para disparar o arco. A flecha voa reta e acerta de longe: mire e mantenha distância!",
-	"mage": "Slimes! Toque em MAGIA (botão grande, canto inferior direito) para lançar uma esfera arcana. Ela explode ao atingir e fere quem estiver por perto. Lançar leva um instante: espere o brilho no cajado!"
+	"warrior": "Inimigos! Toque em ESPADA (botão grande, canto inferior direito) para golpear. A espada acerta quem está perto, na direção em que você olha. Aproxime-se e corte!",
+	"archer": "Inimigos! Toque em FLECHA (botão grande, canto inferior direito) para disparar o arco. A flecha voa reta e acerta de longe: mire e mantenha distância!",
+	"mage": "Inimigos! Toque em MAGIA (botão grande, canto inferior direito) para lançar uma esfera arcana. Ela explode ao atingir e fere quem estiver por perto. Lançar leva um instante: espere o brilho no cajado!"
 }
 
 const TEXT_SKILL := {
@@ -50,12 +56,16 @@ var _story_box: Control
 var _story_label: Label
 var _dialog_box: Control
 var _dialog_text: Label
+var _boss_panel: PanelContainer
+var _boss_name: Label
+var _boss_bar: ProgressBar
 var _tween: Tween
 
 var _typing: bool = false
 var _modal: bool = false
 var _skip_story: bool = false
-var _wave: Array = [] # inimigos da etapa (podem ser liberados ao morrer)
+var _wave: Array = [] # inimigos da etapa
+var _boss: Enemy
 var _skill_flag: bool = false
 var _profile_flag: bool = false
 var _move_target: Vector2 = Vector2.ZERO
@@ -85,6 +95,16 @@ func _exit_tree() -> void:
 		_hud.input_blocked = false
 
 
+func _process(_delta: float) -> void:
+	# Barra de vida do chefe, no alto da tela.
+	if _boss_panel == null or not _boss_panel.visible:
+		return
+	if _boss != null and is_instance_valid(_boss):
+		_boss_bar.value = maxi(_boss.hp, 0)
+	else:
+		_boss_bar.value = 0
+
+
 func _alive() -> bool:
 	return is_inside_tree() and _map != null and is_instance_valid(_map) and _map.is_inside_tree()
 
@@ -95,30 +115,34 @@ func _run() -> void:
 	await _story()
 	if not _alive():
 		return
-	await _step_move()
+	await _room_1()
 	if not _alive():
 		return
-	await _step_attack()
+	await _room_2()
 	if not _alive():
 		return
-	await _step_skill()
+	await _room_3()
 	if not _alive():
 		return
-	await _step_profile()
+	await _room_4()
 	if not _alive():
 		return
-	await _step_trial()
+	await _room_5()
+	if not _alive():
+		return
+	await _room_6()
 	if not _alive():
 		return
 	await _step_finish()
 
 
-func _step_move() -> void:
+# Sala 1: andar até o marcador e conhecer o perfil.
+func _room_1() -> void:
 	_set_objective("Ande até o marcador dourado")
 	await _say("Acorde, jovem herói! Use o JOYSTICK (canto inferior esquerdo) para andar. Quanto mais longe você arrasta, mais rápido corre. Vá até o marcador dourado.")
 	if not _alive():
 		return
-	_move_target = _map.cell_pos(TutorialMap.POINTS["move"])
+	_move_target = _map.point("move")
 	_map.set_marker(_move_target)
 	await _wait_until(_cond_move)
 	if not _alive():
@@ -126,40 +150,6 @@ func _step_move() -> void:
 	_map.clear_marker()
 	Audio.play_sfx("levelup")
 
-
-func _step_attack() -> void:
-	await _say(str(TEXT_ATTACK[_cid]))
-	if not _alive():
-		return
-	_wave.clear()
-	_spawn("slime", TutorialMap.POINTS["fight_a"])
-	_spawn("slime", TutorialMap.POINTS["fight_b"])
-	_map.set_marker(_map.cell_pos(TutorialMap.POINTS["fight"]))
-	await _wait_until(_cond_attack)
-	if not _alive():
-		return
-	_map.clear_marker()
-	Audio.play_sfx("levelup")
-
-
-func _step_skill() -> void:
-	await _say(str(TEXT_SKILL[_cid]))
-	if not _alive():
-		return
-	_skill_flag = false
-	_wave.clear()
-	_spawn("slime", TutorialMap.POINTS["skill_a"])
-	_spawn("bat", TutorialMap.POINTS["skill_b"])
-	_spawn("slime", TutorialMap.POINTS["skill_c"])
-	_map.set_marker(_map.cell_pos(TutorialMap.POINTS["skill"]))
-	await _wait_until(_cond_skill)
-	if not _alive():
-		return
-	_map.clear_marker()
-	Audio.play_sfx("levelup")
-
-
-func _step_profile() -> void:
 	_profile_flag = false
 	_set_objective("Toque no seu crachá (canto superior esquerdo) para abrir o perfil")
 	await _say("Seu crachá, no canto superior esquerdo, mostra vida, experiência e nível. Toque nele para abrir o PERFIL, onde você muda o nome e o volume. Lembre-se: a sua classe é permanente e nunca muda.")
@@ -170,32 +160,151 @@ func _step_profile() -> void:
 		return
 	Audio.play_sfx("levelup")
 
+	await _say("Estas são as Ruínas Esquecidas. O caminho é longo: cada sala traz criaturas mais fortes, até o guardião do último fragmento do cristal. Eu abri o portão. Atravesse-o!")
+	if not _alive():
+		return
+	await _leave_room(2, "Atravesse o portão das ruínas")
 
-func _step_trial() -> void:
-	await _say("Aranhas! São mais fortes que os slimes. Fique de olho na sua vida: frascos vermelhos no chão curam quando você está ferido. Derrote as duas para provar o seu valor!")
+
+# Sala 2: ataque e habilidade contra os monstros iniciais.
+func _room_2() -> void:
+	await _say("(A voz de Aldric ecoa na sua mente.) Este é o Pátio dos Primeiros Inimigos. Os mortos e as criaturas das ruínas rondam por aqui.")
+	if not _alive():
+		return
+	await _say(str(TEXT_ATTACK[_cid]))
 	if not _alive():
 		return
 	_wave.clear()
-	_spawn("spider", TutorialMap.POINTS["trial_a"])
-	_spawn("spider", TutorialMap.POINTS["trial_b"])
-	_map.spawn_potion(TutorialMap.POINTS["potion"])
-	_map.set_marker(_map.cell_pos(TutorialMap.POINTS["trial"]))
-	await _wait_until(_cond_trial)
+	_spawn("goblin_das_ruinas", "fight_a")
+	_spawn("esqueleto_guerreiro", "fight_b")
+	_map.set_marker(_map.point("fight"))
+	await _wait_wave("Derrote os inimigos com %s" % str(_data["attack_name"]))
 	if not _alive():
 		return
 	_map.clear_marker()
+	Audio.play_sfx("levelup")
+
+	await _say(str(TEXT_SKILL[_cid]))
+	if not _alive():
+		return
+	_skill_flag = false
+	_wave.clear()
+	_spawn("morto_vivo", "skill_a")
+	_spawn("arqueiro_esqueleto", "skill_b")
+	_spawn("rato_gigante", "skill_c")
+	_map.set_marker(_map.point("skill"))
+	await _wait_skill_wave()
+	if not _alive():
+		return
+	_map.clear_marker()
+	Audio.play_sfx("levelup")
+	await _leave_room(3, "Siga pela passagem ao norte")
+
+
+# Sala 3: monstros intermediários e frascos de vida.
+func _room_3() -> void:
+	await _say("Os Corredores Subterrâneos! Aqui as criaturas são mais fortes. Fique de olho na sua vida: frascos vermelhos no chão curam quando você está ferido. Derrote todos para abrir o portão de ferro.")
+	if not _alive():
+		return
+	_wave.clear()
+	_spawn("espectro_azul", "a")
+	_spawn("aranha_gigante", "b")
+	_spawn("assassino_das_sombras", "c")
+	_map.spawn_potion(_map.point("potion"))
+	_map.spawn_potion(_map.point("potion2"))
+	await _wait_wave("Derrote os monstros")
+	if not _alive():
+		return
+	Audio.play_sfx("levelup")
+	await _leave_room(4, "Siga pelo portão de ferro")
+
+
+# Sala 4: guardiões avançados e o Golem Ancestral.
+func _room_4() -> void:
+	await _say("O Salão dos Guardiões. Cavaleiros e gárgulas protegem o caminho até a arena. Derrote-os!")
+	if not _alive():
+		return
+	_wave.clear()
+	_spawn("cavaleiro_amaldicoado", "a")
+	_spawn("gargula_sombria", "b")
+	_map.spawn_potion(_map.point("potion"))
+	await _wait_wave("Derrote os guardiões")
+	if not _alive():
+		return
+	Audio.play_sfx("levelup")
+
+	await _say("O Golem Ancestral, guardião do salão! Quando ele levantar os punhos, um CÍRCULO VERMELHO aparece no chão: saia de dentro dele antes que termine, ou o golpe será pesado!")
+	if not _alive():
+		return
+	_wave.clear()
+	_spawn("golem_ancestral", "guardian")
+	_map.spawn_potion(_map.point("potion2"))
+	await _wait_wave("Derrote o Golem Ancestral")
+	if not _alive():
+		return
+	Audio.play_sfx("levelup")
+	await _leave_room(5, "Entre no portal luminoso")
+
+
+# Sala 5: primeiro chefe.
+func _room_5() -> void:
+	await _say("A Arena do Chefe! O Senhor Demônio guarda o caminho. Ele fica furioso quando está ferido. Use os frascos, não pare de se mexer e fuja do círculo vermelho!")
+	if not _alive():
+		return
+	_wave.clear()
+	var boss := _spawn("senhor_demonio", "boss")
+	_map.spawn_potion(_map.point("potion"))
+	_map.spawn_potion(_map.point("potion2"))
+	_show_boss(boss)
+	await _wait_wave("Derrote o Senhor Demônio")
+	_hide_boss()
+	if not _alive():
+		return
+	Audio.play_sfx("levelup")
+	await _leave_room(6, "Siga para a Câmara Final")
+
+
+# Sala 6: último chefe do tutorial.
+func _room_6() -> void:
+	await _say("A Câmara Final! O fragmento do Cristal Eterno brilha logo ali, guardado pelo Senhor das Trevas. Este é o último desafio. Boa sorte, herói!")
+	if not _alive():
+		return
+	_wave.clear()
+	var boss := _spawn("senhor_das_trevas", "boss")
+	_map.spawn_potion(_map.point("potion"))
+	_map.spawn_potion(_map.point("potion2"))
+	_show_boss(boss)
+	await _wait_wave("Derrote o Senhor das Trevas")
+	_hide_boss()
+	if not _alive():
+		return
 	Audio.play_sfx("levelup")
 
 
 func _step_finish() -> void:
 	Game.complete_tutorial()
 	_map.open_exit()
-	await _say("Você conseguiu, %s! Os portões da Vila Inicial estão abertos. Siga pela estrada até o portal dourado. Que a Chama Eterna guie os seus passos!" % Game.player_name)
+	await _say("Você conseguiu, %s! O Senhor das Trevas caiu e o fragmento do cristal voltou a brilhar. Um portal dourado se abriu: ele leva à Vila Inicial. Que a Chama Eterna guie os seus passos!" % Game.player_name)
 	if not _alive():
 		return
-	_map.set_marker(_map.cell_pos(TutorialMap.POINTS["exit"]))
+	_map.set_marker(_map.point("exit"))
 	_set_objective("Entre no portal para ir à Vila Inicial")
 	finished.emit()
+
+
+# Abre o portão da sala e espera o jogador chegar na próxima.
+func _leave_room(next_room: int, objective: String) -> void:
+	_map.unlock_gate()
+	Audio.play_sfx("levelup")
+	_map.set_marker(_map.gate_position())
+	_set_objective(objective)
+	await _wait_until(func() -> bool: return _map.room_index == next_room and not _map.transitioning)
+	if not _alive():
+		return
+	_map.clear_marker()
+	_hud.set_location(_map.title)
+	_set_objective("")
+	_tracker.visible = false
 
 
 # ------------------------------------------------------------------ condições das missões
@@ -204,38 +313,41 @@ func _cond_move() -> bool:
 	return _player.global_position.distance_to(_move_target) < 14.0
 
 
-func _cond_attack() -> bool:
-	var dead := _dead_count()
-	_set_objective("Derrote os slimes com %s (%d/%d)" % [str(_data["attack_name"]), dead, _wave.size()])
-	return dead >= _wave.size()
-
-
-func _cond_skill() -> bool:
-	var dead := _dead_count()
-	if not _skill_flag:
-		_set_objective("Use a habilidade %s (botão azul)" % str(_data["skill_name"]))
-		# Se o jogador derrotou todos sem usar a habilidade, chegam reforços.
-		if dead >= _wave.size():
-			_spawn("slime", TutorialMap.POINTS["skill_a"])
-			_spawn("slime", TutorialMap.POINTS["skill_c"])
-		return false
-	_set_objective("Derrote os inimigos (%d/%d)" % [dead, _wave.size()])
-	return dead >= _wave.size()
-
-
 func _cond_profile() -> bool:
 	# Concluída quando o perfil foi aberto e já foi fechado de novo.
 	return _profile_flag and not get_tree().paused
 
 
-func _cond_trial() -> bool:
-	var dead := _dead_count()
-	_set_objective("Derrote as aranhas (%d/%d)" % [dead, _wave.size()])
-	return dead >= _wave.size()
+# Espera todos os inimigos da etapa morrerem, mostrando o progresso no objetivo.
+func _wait_wave(label: String) -> void:
+	while _alive():
+		var dead := _dead_count()
+		_set_objective("%s (%d/%d)" % [label, dead, _wave.size()])
+		if dead >= _wave.size():
+			return
+		await get_tree().process_frame
 
 
-func _spawn(kind: String, cell: Vector2i) -> void:
-	_wave.append(_map.spawn_enemy(kind, cell))
+# Etapa da habilidade: só termina depois de usá-la. Se todos morrerem antes, chegam reforços.
+func _wait_skill_wave() -> void:
+	while _alive():
+		var dead := _dead_count()
+		if not _skill_flag:
+			_set_objective("Use a habilidade %s (botão azul)" % str(_data["skill_name"]))
+			if dead >= _wave.size():
+				_spawn("goblin_das_ruinas", "skill_a")
+				_spawn("rato_gigante", "skill_c")
+		else:
+			_set_objective("Derrote os inimigos (%d/%d)" % [dead, _wave.size()])
+			if dead >= _wave.size():
+				return
+		await get_tree().process_frame
+
+
+func _spawn(kind: String, point_name: String) -> Enemy:
+	var e := _map.spawn_enemy(kind, _map.point(point_name))
+	_wave.append(e)
+	return e
 
 
 func _dead_count() -> int:
@@ -249,6 +361,20 @@ func _dead_count() -> int:
 func _wait_until(cond: Callable) -> void:
 	while _alive() and not cond.call():
 		await get_tree().process_frame
+
+
+func _show_boss(e: Enemy) -> void:
+	_boss = e
+	_boss_name.text = e.display_name
+	_boss_bar.max_value = e.max_hp
+	_boss_bar.value = e.hp
+	_boss_panel.visible = true
+
+
+func _hide_boss() -> void:
+	_boss = null
+	if _boss_panel != null:
+		_boss_panel.visible = false
 
 
 # ------------------------------------------------------------------ interface
@@ -286,6 +412,44 @@ func _build_ui() -> void:
 
 	_build_dialog()
 	_build_story()
+	_build_boss_bar()
+
+
+func _build_boss_bar() -> void:
+	_boss_panel = PanelContainer.new()
+	_boss_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_boss_panel.visible = false
+	_root.add_child(_boss_panel)
+	_boss_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_boss_panel.offset_left = -260.0
+	_boss_panel.offset_right = 260.0
+	_boss_panel.offset_top = 172.0
+	_boss_panel.offset_bottom = 236.0
+	_boss_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 4)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_boss_panel.add_child(box)
+
+	_boss_name = Label.new()
+	_boss_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_boss_name.add_theme_font_size_override("font_size", 22)
+	_boss_name.add_theme_color_override("font_color", Color("#e0605a"))
+	_boss_name.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(_boss_name)
+
+	_boss_bar = ProgressBar.new()
+	_boss_bar.custom_minimum_size = Vector2(0, 16)
+	_boss_bar.show_percentage = false
+	_boss_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = Color("#b23a34")
+	_boss_bar.add_theme_stylebox_override("fill", fill)
+	var back := StyleBoxFlat.new()
+	back.bg_color = Color(0.08, 0.06, 0.10, 0.9)
+	_boss_bar.add_theme_stylebox_override("background", back)
+	box.add_child(_boss_bar)
 
 
 func _build_dialog() -> void:
