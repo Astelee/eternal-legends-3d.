@@ -13,7 +13,8 @@ config/features=PackedStringArray("4.3", "GL Compatibility")
 
 [eternal_legends]
 
-auth/base_url=""
+firebase/api_key="AIzaSyCeSMuKzDNoV-1-9qvDp3K3zUocZwPHaSM"
+firebase/project_id="eternal-legends-5bd03"
 news/url=""
 
 [autoload]
