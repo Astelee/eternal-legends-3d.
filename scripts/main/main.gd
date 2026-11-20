@@ -2,12 +2,14 @@ extends Node2D
 
 const TOWN_MAP := preload("res://scripts/world/town_map.gd")
 const DUNGEON_MAP := preload("res://scripts/world/dungeon_map.gd")
+const TUTORIAL_MAP := preload("res://scripts/world/tutorial_map.gd")
 const CARD_ART: Texture2D = preload("res://assets/ui/dungeon_cards.png")
 
 # Imagem mostrada na tela de transição (recorte de 128x128 do dungeon_cards.png).
 const CARDS := {
 	"town": {"region": Rect2(128, 256, 128, 128), "title": "Vila Inicial"},
-	"dungeon": {"region": Rect2(384, 256, 128, 128), "title": "Masmorra Esquecida"}
+	"dungeon": {"region": Rect2(384, 256, 128, 128), "title": "Masmorra Esquecida"},
+	"tutorial": {"region": Rect2(128, 256, 128, 128), "title": "Clareira do Despertar"}
 }
 
 @onready var _player: Player = $Player
@@ -17,6 +19,7 @@ const CARDS := {
 @onready var _hud: Hud = $UI/Hud
 
 var _map: GameMap
+var _tutorial: TutorialController
 var _busy: bool = false
 var _fade: ColorRect
 var _card: TextureRect
@@ -31,8 +34,13 @@ func _ready() -> void:
 		return
 	_player.joystick = _joystick
 	_player.set_character_frame(Game.class_frame)
+	# Estilo de combate pela classe da conta (permanente): Guerreiro, Arqueiro ou Mago.
+	var combat_id := Game.combat_class_id()
+	_player.set_combat_class(combat_id)
+	_hud.setup_class(combat_id)
 
 	_hud.attack_pressed.connect(_player.attack)
+	_hud.skill_pressed.connect(_player.use_skill)
 	_hud.revive_pressed.connect(_on_revive_pressed)
 	_hud.profile_opened.connect(_joystick.reset_input)
 
@@ -41,23 +49,30 @@ func _ready() -> void:
 	_hud.set_hp(_player.hp, _player.max_hp)
 
 	_build_fade()
-	_load_map("town", "default")
+	# Quem ainda não fez o tutorial começa nele; a vila só abre depois de concluí-lo.
+	_load_map("tutorial" if not Game.is_tutorial_done() else "town", "default")
 
 
 func _process(_delta: float) -> void:
 	var state_name: String = Player.State.keys()[_player.state]
 	_info.text = "%s v%s | %s | FPS: %d" % [Game.GAME_NAME, Game.VERSION, state_name, Engine.get_frames_per_second()]
+	_hud.set_skill_cooldown(_player.skill_cooldown_left(), _player.skill_cooldown_total())
 
 
 # ------------------------------------------------------------------ mapas
 
 func _make_map(id: String) -> GameMap:
+	if id == "tutorial":
+		return TUTORIAL_MAP.new()
 	if id == "dungeon":
 		return DUNGEON_MAP.new()
 	return TOWN_MAP.new()
 
 
 func _load_map(id: String, from_id: String) -> void:
+	# Trava de segurança: sem tutorial concluído, a vila e a masmorra ficam fechadas.
+	if id != "tutorial" and not Game.is_tutorial_done():
+		id = "tutorial"
 	var map := _make_map(id)
 	_world.add_child(map)
 	_player.reparent(map, false)
@@ -68,6 +83,14 @@ func _load_map(id: String, from_id: String) -> void:
 	_map = map
 	map.portal_used.connect(_on_portal_used)
 	_hud.set_location(map.title)
+
+	if _tutorial != null:
+		_tutorial.queue_free()
+		_tutorial = null
+	if id == "tutorial":
+		_tutorial = TutorialController.new()
+		add_child(_tutorial)
+		_tutorial.setup(_player, _hud, map as TutorialMap, _joystick)
 
 
 func _on_portal_used(target: String, from_id: String) -> void:
