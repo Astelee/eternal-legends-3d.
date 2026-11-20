@@ -52,9 +52,28 @@ func request_password_reset(email: String) -> Dictionary:
 	return await _post("/auth/password-reset", {"email": email.strip_edges()})
 
 
+# Chamadas autenticadas (token da sessão no cabeçalho Authorization).
+func authed_get(path: String) -> Dictionary:
+	if not Session.is_active():
+		await get_tree().process_frame
+		return _fail("unauthorized", "Sua sessão expirou. Entre novamente.", 401)
+	return await _request(HTTPClient.METHOD_GET, path, {}, Session.token)
+
+
+func authed_post(path: String, payload: Dictionary) -> Dictionary:
+	if not Session.is_active():
+		await get_tree().process_frame
+		return _fail("unauthorized", "Sua sessão expirou. Entre novamente.", 401)
+	return await _request(HTTPClient.METHOD_POST, path, payload, Session.token)
+
+
 # ------------------------------------------------------------------ interno
 
 func _post(path: String, payload: Dictionary) -> Dictionary:
+	return await _request(HTTPClient.METHOD_POST, path, payload, "")
+
+
+func _request(method: HTTPClient.Method, path: String, payload: Dictionary, token: String) -> Dictionary:
 	if not is_configured():
 		push_warning("AuthService: servidor não configurado (eternal_legends/auth/base_url ou EL_AUTH_URL).")
 		await get_tree().process_frame
@@ -64,7 +83,10 @@ func _post(path: String, payload: Dictionary) -> Dictionary:
 	req.timeout = TIMEOUT_SECONDS
 	add_child(req)
 	var headers := PackedStringArray(["Content-Type: application/json", "Accept: application/json"])
-	var err: int = req.request(base_url() + path, headers, HTTPClient.METHOD_POST, JSON.stringify(payload))
+	if token != "":
+		headers.append("Authorization: Bearer " + token)
+	var body_text: String = JSON.stringify(payload) if method == HTTPClient.METHOD_POST else ""
+	var err: int = req.request(base_url() + path, headers, method, body_text)
 	if err != OK:
 		req.queue_free()
 		return _fail("request_failed", "Não foi possível iniciar a conexão. Tente novamente.", 0)
