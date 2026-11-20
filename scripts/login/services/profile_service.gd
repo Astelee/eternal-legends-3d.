@@ -1,9 +1,9 @@
 class_name ProfileService
 extends RefCounted
-# Classe do personagem vinculada à conta autenticada.
+# Perfil da conta no Firestore: classe permanente do personagem e papel de GM.
 #
-# Quem decide é SEMPRE o servidor: este serviço só consulta e pede a gravação.
-# Contrato do backend: docs/LOGIN_SCREEN.md (GET/POST /profile/class).
+# Quem decide é SEMPRE o Firestore, pelas regras em firebase/firestore.rules:
+# a classe só pode ser gravada uma vez, e só pelo dono da conta.
 #
 # Toda função devolve:
 #   { "ok": bool, "code": String, "message": String, "class_id": String }
@@ -17,9 +17,50 @@ func _init(auth: AuthService) -> void:
 	_auth = auth
 
 
-# Consulta a classe registrada na conta.
+# Consulta a classe registrada na conta. Na primeira vez, cria o perfil (sem classe).
 func fetch_class() -> Dictionary:
-	var res: Dictionary = await _auth.authed_get("/profile/class")
+	var res: Dictionary = await _read_profile()
+	if str(res["code"]) == "not_found":
+		var created: Dictionary = await _create_profile()
+		if not created["ok"] and int(created["status"]) != 409:
+			return _from_failure(created)
+		res = await _read_profile()
+	return res
+
+
+# Pede a gravação da classe. O Firestore só aceita se a conta ainda não tiver classe.
+func choose_class(class_id: String) -> Dictionary:
+	if Game.frame_of_id(class_id) < 0:
+		return _result(false, "invalid", "Classe inválida.", "")
+	var res: Dictionary = await _auth.firestore_patch(
+		"/players/" + Session.uid.uri_encode(),
+		{"class_id": {"stringValue": class_id}},
+		["class_id"]
+	)
+	if res["ok"]:
+		# Só aceita se o servidor confirmou exatamente a classe pedida.
+		var saved: String = _read_class_id(res["data"])
+		if saved != class_id:
+			return _result(false, "invalid_response", "O servidor não confirmou a escolha. Tente novamente.", "")
+		return _result(true, "ok", "", saved)
+	if str(res["code"]) == "forbidden":
+		# Regra negou: normalmente porque a conta já tem classe. Confere a oficial.
+		var current: Dictionary = await _read_profile()
+		if current["ok"] and str(current["class_id"]) != "":
+			return _result(false, "already_chosen", "Esta conta já possui um personagem definido.", str(current["class_id"]))
+	return _from_failure(res)
+
+
+# GM = existe o documento gms/<uid>, criado só pelo console do Firebase (as regras proíbem o app de criar).
+func fetch_is_gm() -> bool:
+	var res: Dictionary = await _auth.firestore_get("/gms/" + Session.uid.uri_encode())
+	return bool(res["ok"])
+
+
+# ------------------------------------------------------------------ interno
+
+func _read_profile() -> Dictionary:
+	var res: Dictionary = await _auth.firestore_get("/players/" + Session.uid.uri_encode())
 	if not res["ok"]:
 		return _from_failure(res)
 	var cid: String = _read_class_id(res["data"])
@@ -28,43 +69,31 @@ func fetch_class() -> Dictionary:
 	return _result(true, "ok", "", cid)
 
 
-# Pede ao servidor para gravar a classe. O servidor só grava se o campo estiver vazio.
-func choose_class(class_id: String) -> Dictionary:
-	if Game.frame_of_id(class_id) < 0:
-		return _result(false, "invalid", "Classe inválida.", "")
-	var res: Dictionary = await _auth.authed_post("/profile/class", {"class_id": class_id})
-	if res["ok"]:
-		# Só aceita se o servidor confirmou exatamente a classe pedida.
-		var saved: String = _read_class_id(res["data"])
-		if saved != class_id:
-			return _result(false, "invalid_response", "O servidor não confirmou a escolha. Tente novamente.", "")
-		return _result(true, "ok", "", saved)
-	if int(res["status"]) == 409:
-		var existing: String = _read_class_id(res["data"])
-		if Game.frame_of_id(existing) >= 0:
-			return _result(false, "already_chosen", "Esta conta já possui um personagem definido.", existing)
-	return _from_failure(res)
+func _create_profile() -> Dictionary:
+	var fields := {
+		"username": {"stringValue": Session.username.left(16)},
+		"class_id": {"nullValue": null},
+		"created_at": {"timestampValue": Time.get_datetime_string_from_system(true) + "Z"}
+	}
+	return await _auth.firestore_create("players", Session.uid, fields)
 
 
-# ------------------------------------------------------------------ interno
-
-func _read_class_id(data: Variant) -> String:
-	if data is Dictionary:
-		var value: Variant = data.get("class_id", null)
-		if value == null:
-			var profile: Variant = data.get("profile", null)
-			if profile is Dictionary:
-				value = profile.get("class_id", null)
-		if value != null:
-			return str(value).strip_edges()
+# Documento do Firestore: {"fields": {"class_id": {"stringValue": "warrior"} | {"nullValue": null}}}
+func _read_class_id(doc: Variant) -> String:
+	if doc is Dictionary:
+		var fields: Variant = doc.get("fields", null)
+		if fields is Dictionary:
+			var field: Variant = fields.get("class_id", null)
+			if field is Dictionary and field.has("stringValue"):
+				return str(field["stringValue"]).strip_edges()
 	return ""
 
 
 func _from_failure(res: Dictionary) -> Dictionary:
 	var code: String = str(res["code"])
 	var message: String = str(res["message"])
-	if code == "unauthorized":
-		message = "Sua sessão expirou. Entre novamente."
+	if code == "forbidden":
+		message = "O servidor negou o acesso ao perfil. Confira as regras do Firestore (docs/FIREBASE.md)."
 	return _result(false, code, message, "")
 
 
