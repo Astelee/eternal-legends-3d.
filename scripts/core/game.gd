@@ -7,14 +7,19 @@ const VERSION := "0.2.0"
 const SAVE_PATH := "user://profile.cfg"
 
 # Classes disponíveis: "frame" é o índice da peça em assets/characters/tiny_dungeon.png.
+# "id" é o identificador gravado na conta (servidor); "frame" é só visual.
 const CLASSES := [
-	{"name": "Guerreiro", "frame": 96},
-	{"name": "Arqueiro", "frame": 112},
-	{"name": "Mago", "frame": 84}
+	{"id": "warrior", "name": "Guerreiro", "frame": 96},
+	{"id": "archer", "name": "Arqueiro", "frame": 112},
+	{"id": "mage", "name": "Mago", "frame": 84}
 ]
 
 var player_name: String = "Herói"
 var class_frame: int = 96
+# Classe da conta autenticada. Só vale depois que o servidor confirmou (class_confirmed).
+# O valor em user://profile.cfg é apenas cache visual: o login sempre o sobrescreve.
+var class_id: String = ""
+var class_confirmed: bool = false
 var level: int = 1
 var xp: int = 0
 var music_volume: float = 0.7
@@ -23,6 +28,37 @@ var sfx_volume: float = 0.9
 
 func _ready() -> void:
 	load_profile()
+
+
+func frame_of_id(id: String) -> int:
+	for c in CLASSES:
+		if c["id"] == id:
+			return c["frame"]
+	return -1
+
+
+# Aplica a classe devolvida pelo servidor. Retorna false se o id for desconhecido.
+func apply_account_class(id: String) -> bool:
+	var frame := frame_of_id(id)
+	if frame < 0:
+		return false
+	class_id = id
+	class_frame = frame
+	class_confirmed = true
+	save_profile()
+	profile_changed.emit()
+	return true
+
+
+# Esquece a classe confirmada (logout, voltar ao login ou falha de sessão).
+func clear_account_class() -> void:
+	class_id = ""
+	class_confirmed = false
+
+
+# Atalho de desenvolvimento (entrada de debug sem servidor): usa a classe em cache.
+func allow_debug_entry() -> void:
+	class_confirmed = true
 
 
 func class_name_of(frame: int) -> String:
