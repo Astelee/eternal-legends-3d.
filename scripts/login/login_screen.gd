@@ -18,6 +18,7 @@ const LOGIN_WIDTH := 390.0
 const NEWS_WIDTH := 330.0
 
 var auth: AuthService
+var profile: ProfileService
 var news_repo: NewsRepository
 
 var _bg: TextureRect
@@ -46,6 +47,7 @@ var _logo_drop: float = 0.0
 var _logo_base: Vector2 = Vector2.ZERO
 var _layout_queued: bool = false
 var _entering: bool = false
+var _class_select: ClassSelect
 var _prev_scale_size: Vector2i = Vector2i(1280, 720)
 var _bg_tween: Tween
 
@@ -58,6 +60,7 @@ func _ready() -> void:
 
 	auth = AuthService.new()
 	add_child(auth)
+	profile = ProfileService.new(auth)
 	news_repo = NewsRepository.new()
 	add_child(news_repo)
 
@@ -514,20 +517,41 @@ func _load_news() -> void:
 	_queue_layout()
 
 
+# Depois de autenticar, o servidor decide: conta sem classe abre a seleção obrigatória;
+# conta com classe entra direto no mundo (ver ClassSelect).
 func _on_login_succeeded(_response: Dictionary) -> void:
+	if _entering or _class_select != null:
+		return
 	if Session.username != "":
 		Game.player_name = Session.username
 		Game.save_profile()
 		Game.profile_changed.emit()
+	Game.clear_account_class()
+	_class_select = ClassSelect.new(profile)
+	_class_select.class_ready.connect(_on_class_ready)
+	_class_select.cancelled.connect(_on_class_cancelled)
+	add_child(_class_select)
+
+
+func _on_class_ready() -> void:
 	_enter_game()
+
+
+func _on_class_cancelled() -> void:
+	Session.clear()
+	Game.clear_account_class()
+	if _class_select != null:
+		_class_select.queue_free()
+		_class_select = null
 
 
 func _debug_skip() -> void:
 	push_warning("LoginScreen: entrada de debug SEM autenticação.")
+	Game.allow_debug_entry()
 	_enter_game()
 
 
-# A escolha de classe acontece dentro do jogo, depois de entrar na conta.
+# Só é chamado com a classe já confirmada pelo servidor (ou pela entrada de debug).
 func _enter_game() -> void:
 	if _entering:
 		return
