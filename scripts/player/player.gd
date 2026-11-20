@@ -69,6 +69,7 @@ func _ready() -> void:
 	max_hp = _max_hp_for(Game.level)
 	hp = max_hp
 	Game.profile_changed.connect(_on_profile_changed)
+	Game.inventory_changed.connect(_on_gear_changed)
 	hp_changed.emit(hp, max_hp)
 
 
@@ -125,7 +126,8 @@ func _move() -> void:
 		_facing_left = false
 
 	var running := strength >= run_threshold
-	velocity = dir * (run_speed if running else walk_speed)
+	var speed_bonus := 1.0 + float(Game.stat("move_speed")) / 100.0
+	velocity = dir * (run_speed if running else walk_speed) * speed_bonus
 	_set_state(State.RUN if running else State.WALK)
 
 	_step_timer -= get_physics_process_delta_time()
@@ -214,11 +216,16 @@ func _auto_face(max_dist: float) -> void:
 
 
 func attack_damage() -> int:
-	return 8 + Game.level * 3
+	if combat_class == "mage":
+		return Game.stat("magic_atk")
+	return Game.stat("phys_atk")
 
 
 func _damage_for(mult: float) -> int:
-	return int(attack_damage() * mult * randf_range(0.85, 1.2))
+	var dmg := float(attack_damage()) * mult * randf_range(0.85, 1.2)
+	if randf() * 100.0 < float(Game.stat("crit_chance")):
+		dmg *= float(Game.stat("crit_dmg")) / 100.0
+	return int(dmg)
 
 
 func _release() -> void:
@@ -310,6 +317,11 @@ func _cast_nova() -> void:
 func take_hit(amount: int = 10, from: Vector2 = Vector2.ZERO) -> void:
 	if state == State.DEAD or _invuln > 0.0:
 		return
+	if randf() * 100.0 < float(Game.stat("dodge")):
+		FloatText.spawn(get_parent(), global_position, "Esquiva", Color("#8fd8ff"))
+		return
+	var defense := (Game.stat("phys_def") + Game.stat("magic_def")) / 2
+	amount = maxi(1, int(round(float(amount) * 100.0 / (100.0 + float(defense)))))
 	hp = maxi(hp - amount, 0)
 	hp_changed.emit(hp, max_hp)
 	_invuln = 0.7
@@ -371,7 +383,20 @@ func set_character_frame(frame: int) -> void:
 
 
 func _max_hp_for(level: int) -> int:
-	return base_hp + (level - 1) * hp_per_level
+	var gear: Dictionary = Game.gear_stats()
+	return base_hp + (level - 1) * hp_per_level + int(gear.get("max_hp", 0))
+
+
+# Equipou ou tirou um item: recalcula a vida máxima.
+func _on_gear_changed() -> void:
+	var new_max := _max_hp_for(Game.level)
+	if new_max == max_hp:
+		return
+	var diff := new_max - max_hp
+	max_hp = new_max
+	if state != State.DEAD:
+		hp = clampi(hp + maxi(diff, 0), 1, max_hp)
+	hp_changed.emit(hp, max_hp)
 
 
 func _on_profile_changed() -> void:
