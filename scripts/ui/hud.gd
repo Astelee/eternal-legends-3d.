@@ -4,6 +4,7 @@ extends Control
 # redondos (canto inferior direito) e painel de perfil (abre ao tocar no crachá).
 
 signal attack_pressed
+signal skill_pressed
 signal revive_pressed
 signal profile_opened
 
@@ -19,6 +20,10 @@ var _hp_bar: ProgressBar
 var _xp_bar: ProgressBar
 
 var _attack_button: Button
+var _skill_button: Button
+var _skill_name: String = "Habilidade"
+# Quando true, os botões de ação ignoram toques (ex.: durante diálogos do tutorial).
+var input_blocked: bool = false
 var _revive_box: CenterContainer
 var _location_label: Label
 
@@ -49,11 +54,13 @@ func _ready() -> void:
 func _input(event: InputEvent) -> void:
 	if not (event is InputEventScreenTouch) or not event.pressed:
 		return
-	if _attack_button == null or _attack_button.disabled or _profile.visible:
+	if _attack_button == null or _attack_button.disabled or _profile.visible or input_blocked:
 		return
 	if _attack_button.get_global_rect().has_point(event.position):
 		attack_pressed.emit()
 		_flash_attack_button()
+	elif _skill_button != null and _skill_button.get_global_rect().has_point(event.position):
+		skill_pressed.emit()
 
 
 func _flash_attack_button() -> void:
@@ -78,6 +85,32 @@ func set_dead(dead: bool) -> void:
 		_revive_box.visible = dead
 	if _attack_button:
 		_attack_button.disabled = dead
+	if _skill_button:
+		_skill_button.disabled = dead
+
+
+# Adapta os botões à classe da conta: ícone e nome do ataque e da habilidade.
+func setup_class(id: String) -> void:
+	var data := ClassCombat.get_data(id)
+	var atk_icon := ClassCombat.attack_icon(id)
+	_attack_button.icon = atk_icon if atk_icon != null else ICON_ATTACK
+	(_attack_button.get_meta("caption") as Label).text = str(data["attack_name"])
+	_skill_name = str(data["skill_name"])
+	_skill_button.icon = ClassCombat.skill_icon(id)
+	(_skill_button.get_meta("caption") as Label).text = _skill_name
+
+
+# Mostra a recarga da habilidade no botão (escurece e conta os segundos).
+func set_skill_cooldown(left: float, _total: float) -> void:
+	if _skill_button == null or _skill_button.disabled:
+		return
+	var caption := _skill_button.get_meta("caption") as Label
+	if left > 0.0:
+		_skill_button.modulate = Color(0.5, 0.5, 0.58)
+		caption.text = "%.1fs" % left
+	else:
+		_skill_button.modulate = Color.WHITE
+		caption.text = _skill_name
 
 
 func set_location(text: String) -> void:
@@ -169,6 +202,7 @@ func _build_actions() -> void:
 	box.grow_vertical = Control.GROW_DIRECTION_BEGIN
 
 	_attack_button = _make_round_button(box, ICON_ATTACK, GameTheme.GOLD, Vector2(70, 20), 150, 96, "Atacar")
+	_skill_button = _make_round_button(box, ICON_ATTACK, GameTheme.MANA, Vector2(-60, 80), 110, 64, "Habilidade")
 	# O ataque é disparado por _input (toque direto), não pelo sinal "pressed" do Button:
 	# o Button só enxerga o primeiro dedo, então não respondia com o joystick em uso.
 
