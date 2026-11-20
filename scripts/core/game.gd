@@ -1,6 +1,7 @@
 extends Node
 
 signal profile_changed
+signal inventory_changed
 
 const GAME_NAME := "Eternal Legends"
 const VERSION := "0.2.0"
@@ -93,6 +94,233 @@ func complete_tutorial() -> void:
 	cfg.load(SAVE_PATH) # se o arquivo ainda não existe, começa vazio
 	cfg.set_value("tutorial", _tutorial_key(), true)
 	cfg.save(SAVE_PATH)
+
+
+# ------------------------------------------------------------------ mochila e equipamentos
+
+const BAG_START_SIZE := 30
+
+var backpack_unlocked: bool = false
+var inventory: Array = [] # cada item: {"id": String, "qty": int, "locked": bool, "new": bool}
+var equipped: Dictionary = {} # espaço -> id do item
+var bag_capacity: int = BAG_START_SIZE
+var _bag_key: String = ""
+
+
+# Carrega a mochila da conta atual (uma vez por conta).
+func load_bag() -> void:
+	var key := _tutorial_key()
+	if key == _bag_key:
+		return
+	_bag_key = key
+	inventory = []
+	equipped = {}
+	backpack_unlocked = false
+	bag_capacity = BAG_START_SIZE
+	var cfg := ConfigFile.new()
+	if cfg.load(SAVE_PATH) == OK:
+		backpack_unlocked = bool(cfg.get_value("bag", key + "_unlocked", false))
+		bag_capacity = int(cfg.get_value("bag", key + "_cap", BAG_START_SIZE))
+		var inv: Variant = JSON.parse_string(str(cfg.get_value("bag", key + "_inv", "[]")))
+		if inv is Array:
+			for e in inv:
+				if e is Dictionary and Items.DB.has(str(e.get("id", ""))):
+					inventory.append({"id": str(e["id"]), "qty": int(e.get("qty", 1)), "locked": bool(e.get("locked", false)), "new": false})
+		var eq: Variant = JSON.parse_string(str(cfg.get_value("bag", key + "_eq", "{}")))
+		if eq is Dictionary:
+			for s in eq:
+				if Items.DB.has(str(eq[s])) and Items.SLOTS.has(str(s)):
+					equipped[str(s)] = str(eq[s])
+	# Quem já terminou o tutorial antes da mochila existir recebe a mochila e a arma inicial.
+	if is_tutorial_done() and not backpack_unlocked:
+		backpack_unlocked = true
+		add_item(starter_weapon_id())
+		add_item("pocao_vida", 3)
+	inventory_changed.emit()
+
+
+func save_bag() -> void:
+	if _bag_key == "":
+		return
+	var cfg := ConfigFile.new()
+	cfg.load(SAVE_PATH)
+	cfg.set_value("bag", _bag_key + "_unlocked", backpack_unlocked)
+	cfg.set_value("bag", _bag_key + "_cap", bag_capacity)
+	cfg.set_value("bag", _bag_key + "_inv", JSON.stringify(inventory))
+	cfg.set_value("bag", _bag_key + "_eq", JSON.stringify(equipped))
+	cfg.save(SAVE_PATH)
+
+
+func unlock_backpack() -> void:
+	load_bag()
+	backpack_unlocked = true
+	save_bag()
+	inventory_changed.emit()
+
+
+# Arma inicial de cada classe.
+func starter_weapon_id() -> String:
+	match combat_class_id():
+		"archer":
+			return "arco_despertar"
+		"mage":
+			return "cajado_despertar"
+	return "espada_despertar"
+
+
+# Guarda um item (empilha quando dá). Retorna false se a mochila ficou cheia.
+func add_item(id: String, qty: int = 1) -> bool:
+	load_bag()
+	var def := Items.get_def(id)
+	if def.is_empty():
+		return false
+	var stack: int = int(def.get("stack", 1))
+	var left := qty
+	if stack > 1:
+		for entry in inventory:
+			if left <= 0:
+				break
+			if str(entry["id"]) == id and int(entry["qty"]) < stack:
+				var room: int = stack - int(entry["qty"])
+				var put: int = mini(room, left)
+				entry["qty"] = int(entry["qty"]) + put
+				left -= put
+	while left > 0:
+		if inventory.size() >= bag_capacity:
+			save_bag()
+			inventory_changed.emit()
+			return false
+		var put2: int = mini(stack, left)
+		inventory.append({"id": id, "qty": put2, "locked": false, "new": true})
+		left -= put2
+	save_bag()
+	inventory_changed.emit()
+	return true
+
+
+func remove_at(index: int, qty: int = 1) -> void:
+	if index < 0 or index >= inventory.size():
+		return
+	var entry: Dictionary = inventory[index]
+	var left: int = int(entry["qty"]) - qty
+	if left > 0:
+		entry["qty"] = left
+	else:
+		inventory.remove_at(index)
+	save_bag()
+	inventory_changed.emit()
+
+
+# Motivo pelo qual o item não pode ser equipado ("" = pode).
+func equip_error(id: String) -> String:
+	var def := Items.get_def(id)
+	if def.is_empty() or str(def["type"]) != "equip":
+		return "Este item não é um equipamento."
+	var req: int = int(def.get("level", 1))
+	if level < req:
+		return "Requer nível %d." % req
+	var cls: String = str(def.get("cls", ""))
+	if cls != "" and cls != combat_class_id():
+		return "Exclusivo para %s." % str(Items.CLASS_NAMES.get(cls, cls))
+	return ""
+
+
+# Espaço onde o item vai ao ser equipado (anéis e ornamentos usam o primeiro vazio).
+func target_slot(id: String) -> String:
+	var def := Items.get_def(id)
+	var slot: String = str(def.get("slot", ""))
+	if slot == "ring":
+		return "ring1" if not equipped.has("ring1") else ("ring2" if not equipped.has("ring2") else "ring1")
+	if slot == "ornament":
+		return "orn1" if not equipped.has("orn1") else ("orn2" if not equipped.has("orn2") else "orn1")
+	return slot
+
+
+# Equipa o item da mochila. Retorna uma mensagem de erro ("" = deu certo).
+func equip_index(index: int) -> String:
+	if index < 0 or index >= inventory.size():
+		return ""
+	var entry: Dictionary = inventory[index]
+	var id := str(entry["id"])
+	var err := equip_error(id)
+	if err != "":
+		return err
+	var slot := target_slot(id)
+	var old := str(equipped.get(slot, ""))
+	equipped[slot] = id
+	inventory.remove_at(index)
+	if old != "":
+		inventory.append({"id": old, "qty": 1, "locked": false, "new": false})
+	save_bag()
+	inventory_changed.emit()
+	return ""
+
+
+func unequip_slot(slot: String) -> String:
+	if not equipped.has(slot):
+		return ""
+	if inventory.size() >= bag_capacity:
+		return "Mochila cheia."
+	var id := str(equipped[slot])
+	equipped.erase(slot)
+	inventory.append({"id": id, "qty": 1, "locked": false, "new": false})
+	save_bag()
+	inventory_changed.emit()
+	return ""
+
+
+# Organiza: equipamentos primeiro, depois por raridade e nível.
+func sort_inventory() -> void:
+	inventory.sort_custom(_item_less)
+	save_bag()
+	inventory_changed.emit()
+
+
+func _item_less(a: Dictionary, b: Dictionary) -> bool:
+	var order := {"equip": 0, "consumable": 1, "material": 2, "quest": 3}
+	var da := Items.get_def(str(a["id"]))
+	var db := Items.get_def(str(b["id"]))
+	var ta: int = int(order.get(str(da["type"]), 9))
+	var tb: int = int(order.get(str(db["type"]), 9))
+	if ta != tb:
+		return ta < tb
+	var ra: int = int(da["rarity"])
+	var rb: int = int(db["rarity"])
+	if ra != rb:
+		return ra > rb
+	var la: int = int(da["level"])
+	var lb: int = int(db["level"])
+	if la != lb:
+		return la > lb
+	return str(da["name"]) < str(db["name"])
+
+
+# ------------------------------------------------------------------ atributos
+
+func base_stats() -> Dictionary:
+	return {
+		"phys_atk": 8 + level * 3, "magic_atk": 8 + level * 3,
+		"phys_def": level * 2, "magic_def": level * 2,
+		"max_hp": 100 + (level - 1) * 10, "max_mp": 50 + level * 5,
+		"move_speed": 0, "accuracy": 100, "crit_chance": 5, "crit_dmg": 150, "dodge": 0
+	}
+
+
+# Soma dos atributos dos itens equipados.
+func gear_stats() -> Dictionary:
+	var total := {}
+	for slot in equipped:
+		var def := Items.get_def(str(equipped[slot]))
+		var st: Dictionary = def.get("stats", {})
+		for k in st:
+			total[k] = int(total.get(k, 0)) + int(st[k])
+	return total
+
+
+func stat(key: String) -> int:
+	var base: Dictionary = base_stats()
+	var gear: Dictionary = gear_stats()
+	return int(base.get(key, 0)) + int(gear.get(key, 0))
 
 
 func class_name_of(frame: int) -> String:
