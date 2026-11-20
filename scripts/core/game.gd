@@ -20,6 +20,9 @@ var class_frame: int = 96
 # O valor em user://profile.cfg é apenas cache visual: o login sempre o sobrescreve.
 var class_id: String = ""
 var class_confirmed: bool = false
+# GM (mestre do jogo): vem do Firestore (gms/<uid>). Aqui é só para exibir; poderes de GM
+# precisam ser validados pelas regras do servidor, nunca por esta variável.
+var is_gm: bool = false
 var level: int = 1
 var xp: int = 0
 var music_volume: float = 0.7
@@ -54,6 +57,7 @@ func apply_account_class(id: String) -> bool:
 func clear_account_class() -> void:
 	class_id = ""
 	class_confirmed = false
+	is_gm = false
 
 
 # Atalho de desenvolvimento (entrada de debug sem servidor): usa a classe em cache.
