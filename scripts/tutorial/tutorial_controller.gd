@@ -198,6 +198,9 @@ func _room_2() -> void:
 		return
 	_map.clear_marker()
 	Audio.play_sfx("levelup")
+	await _step_backpack()
+	if not _alive():
+		return
 	await _leave_room(3, "Siga pela passagem ao norte")
 
 
@@ -216,6 +219,7 @@ func _room_3() -> void:
 	if not _alive():
 		return
 	Audio.play_sfx("levelup")
+	_give(["colar_vida", "pocao_vida"])
 	await _leave_room(4, "Siga pelo portão de ferro")
 
 
@@ -243,6 +247,7 @@ func _room_4() -> void:
 	if not _alive():
 		return
 	Audio.play_sfx("levelup")
+	_give(["elmo_ferro", "peitoral_reforcado"])
 	await _leave_room(5, "Entre no portal luminoso")
 
 
@@ -261,6 +266,7 @@ func _room_5() -> void:
 	if not _alive():
 		return
 	Audio.play_sfx("levelup")
+	_give(["anel_precisao", "anel_vigor"])
 	await _leave_room(6, "Siga para a Câmara Final")
 
 
@@ -282,6 +288,7 @@ func _room_6() -> void:
 
 
 func _step_finish() -> void:
+	_give(["ornamento_vento"])
 	Game.complete_tutorial()
 	_map.open_exit()
 	await _say("Você conseguiu, %s! O Senhor das Trevas caiu e o fragmento do cristal voltou a brilhar. Um portal dourado se abriu: ele leva à Vila Inicial. Que a Chama Eterna guie os seus passos!" % Game.player_name)
@@ -290,6 +297,36 @@ func _step_finish() -> void:
 	_map.set_marker(_map.point("exit"))
 	_set_objective("Entre no portal para ir à Vila Inicial")
 	finished.emit()
+
+
+# Libera a mochila e entrega a arma especial da classe (sala 2).
+func _step_backpack() -> void:
+	var first_time := not Game.backpack_unlocked
+	_hud.unlock_backpack()
+	if first_time:
+		Game.add_item(Game.starter_weapon_id())
+		Game.add_item("pocao_vida", 3)
+	Audio.play_sfx("levelup")
+	await _say("Algo brilha entre os destroços! É a sua primeira arma especial. A MOCHILA também foi liberada: toque no ícone da mochila, ao lado dos botões de ataque. Abra-a, toque na arma e use EQUIPAR.")
+	if not _alive():
+		return
+	_set_objective("Abra a mochila e equipe a arma especial")
+	await _wait_until(func() -> bool: return Game.equipped.has("weapon") and not get_tree().paused)
+	if not _alive():
+		return
+	Audio.play_sfx("levelup")
+	_set_objective("")
+	_tracker.visible = false
+
+
+# Entrega itens na mochila e avisa na tela.
+func _give(ids: Array) -> void:
+	for i in ids:
+		var id: String = str(i)
+		Game.add_item(id)
+		var def := Items.get_def(id)
+		FloatText.spawn(_map, _player.global_position + Vector2(0, -8), "Novo: %s" % str(def.get("name", id)), Color("#f2dc94"))
+	Audio.play_sfx("levelup")
 
 
 # Abre o portão da sala e espera o jogador chegar na próxima.
