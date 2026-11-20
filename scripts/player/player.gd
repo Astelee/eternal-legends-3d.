@@ -19,6 +19,7 @@ const WEAPON_REACH := {96: 20.0, 112: 28.0, 84: 24.0}
 @export var run_speed: float = 80.0
 @export var run_threshold: float = 0.85
 @export var attack_time: float = 0.5
+@export_range(0.0, 1.0) var attack_move_factor: float = 0.8 # velocidade ao andar atacando (0 = parado)
 @export var hurt_time: float = 0.3
 @export var base_hp: int = 100
 @export var hp_per_level: int = 10
@@ -67,7 +68,7 @@ func _physics_process(delta: float) -> void:
 	_invuln = maxf(_invuln - delta, 0.0)
 	match state:
 		State.ATTACK:
-			velocity = Vector2.ZERO
+			velocity = _attack_velocity()
 			_state_timer -= delta
 			# O golpe acerta na metade do movimento da arma.
 			if not _hit_done and _state_timer <= attack_time * 0.55:
@@ -118,6 +119,15 @@ func _move() -> void:
 	if _step_timer <= 0.0:
 		_step_timer = 0.22 if running else 0.34
 		Audio.play_sfx("step", 0.15)
+
+
+# Durante o ataque o personagem continua andando na direção do joystick,
+# sem mudar o estado nem a direção do golpe.
+func _attack_velocity() -> Vector2:
+	if joystick == null or joystick.output.length() < 0.01:
+		return Vector2.ZERO
+	var angle := posmod(roundi(joystick.output.angle() / (PI / 4.0)), 8) * PI / 4.0
+	return Vector2.from_angle(angle) * walk_speed * attack_move_factor
 
 
 # ------------------------------------------------------------------ combate
