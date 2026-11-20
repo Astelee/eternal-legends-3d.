@@ -419,7 +419,7 @@ func _refresh_profile() -> void:
 	var tex := _avatar_texture(Game.class_frame)
 	_badge_avatar.texture = tex
 	_profile_avatar.texture = tex
-	_badge_name.text = Game.player_name
+	_badge_name.text = Game.player_name + (" [GM]" if Game.is_gm else "")
 	_badge_level.text = "Nv %d  %s" % [Game.level, Game.class_name_of(Game.class_frame)]
 	_xp_bar.max_value = Game.xp_to_next()
 	_xp_bar.value = Game.xp
