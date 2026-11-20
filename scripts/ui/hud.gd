@@ -11,6 +11,7 @@ signal profile_opened
 const CHAR_TEX: Texture2D = preload("res://assets/characters/tiny_dungeon.png")
 const ICON_ATTACK: Texture2D = preload("res://assets/ui/icon_attack.png")
 const ICON_REVIVE: Texture2D = preload("res://assets/ui/icon_revive.png")
+const ICON_BAG: Texture2D = preload("res://assets/ui/icon_bag.png")
 const COLS := 12
 
 var _badge_avatar: TextureRect
@@ -25,6 +26,8 @@ var _skill_name: String = "Habilidade"
 # Quando true, os botões de ação ignoram toques (ex.: durante diálogos do tutorial).
 var input_blocked: bool = false
 var _revive_box: CenterContainer
+var _backpack: Backpack
+var _bag_button: Button
 var _location_label: Label
 
 var _profile: Control
@@ -47,14 +50,19 @@ func _ready() -> void:
 	_build_actions()
 	_build_location()
 	_build_profile_panel()
+	Game.load_bag()
+	_backpack = Backpack.new()
+	add_child(_backpack)
+	Game.inventory_changed.connect(_refresh_bag_button)
 	Game.profile_changed.connect(_refresh_profile)
+	_refresh_bag_button()
 	_refresh_profile()
 
 
 func _input(event: InputEvent) -> void:
 	if not (event is InputEventScreenTouch) or not event.pressed:
 		return
-	if _attack_button == null or _attack_button.disabled or _profile.visible or input_blocked:
+	if _attack_button == null or _attack_button.disabled or _profile.visible or _backpack.visible or input_blocked:
 		return
 	if _attack_button.get_global_rect().has_point(event.position):
 		attack_pressed.emit()
@@ -203,6 +211,8 @@ func _build_actions() -> void:
 
 	_attack_button = _make_round_button(box, ICON_ATTACK, GameTheme.GOLD, Vector2(70, 20), 150, 96, "Atacar")
 	_skill_button = _make_round_button(box, ICON_ATTACK, GameTheme.MANA, Vector2(-60, 80), 110, 64, "Habilidade")
+	_bag_button = _make_round_button(box, ICON_BAG, GameTheme.GOLD, Vector2(-180, 110), 90, 56, "Mochila")
+	_bag_button.pressed.connect(open_backpack)
 	# O ataque é disparado por _input (toque direto), não pelo sinal "pressed" do Button:
 	# o Button só enxerga o primeiro dedo, então não respondia com o joystick em uso.
 
@@ -402,6 +412,28 @@ func _make_slider_row(parent: Control, label_text: String) -> HSlider:
 	s.custom_minimum_size = Vector2(0, 36)
 	row.add_child(s)
 	return s
+
+
+# Mochila: o botão só aparece depois de liberada (durante o tutorial).
+func unlock_backpack() -> void:
+	Game.unlock_backpack()
+	_refresh_bag_button()
+
+
+func open_backpack() -> void:
+	if _profile.visible or _backpack.visible or not Game.backpack_unlocked:
+		return
+	profile_opened.emit() # solta o joystick, como ao abrir o perfil
+	_backpack.open()
+
+
+func _refresh_bag_button() -> void:
+	if _bag_button == null:
+		return
+	_bag_button.visible = Game.backpack_unlocked
+	var caption := _bag_button.get_meta("caption") as Label
+	if caption != null:
+		caption.visible = Game.backpack_unlocked
 
 
 func open_profile() -> void:
