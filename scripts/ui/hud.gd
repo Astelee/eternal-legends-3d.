@@ -5,7 +5,6 @@ extends Control
 
 signal attack_pressed
 signal revive_pressed
-signal class_selected(frame: int)
 signal profile_opened
 
 const CHAR_TEX: Texture2D = preload("res://assets/characters/tiny_dungeon.png")
@@ -28,7 +27,6 @@ var _profile_avatar: TextureRect
 var _name_edit: LineEdit
 var _class_label: Label
 var _stats_label: Label
-var _class_buttons: Dictionary = {}
 var _music_slider: HSlider
 var _sfx_slider: HSlider
 var _hp: int = 100
@@ -331,36 +329,6 @@ func _build_profile_panel() -> void:
 	_stats_label.add_theme_font_size_override("font_size", 20)
 	info.add_child(_stats_label)
 
-	# Classes
-	var class_title := Label.new()
-	class_title.text = "Classe"
-	class_title.add_theme_font_size_override("font_size", 18)
-	class_title.add_theme_color_override("font_color", GameTheme.GOLD)
-	v.add_child(class_title)
-
-	var class_row := HBoxContainer.new()
-	class_row.add_theme_constant_override("separation", 10)
-	v.add_child(class_row)
-	var group := ButtonGroup.new()
-	var selected_style := GameTheme.box(Color("#4a3a1c"), GameTheme.GOLD_LIGHT, 4, 8, 12)
-	for c in Game.CLASSES:
-		var b := Button.new()
-		b.toggle_mode = true
-		b.button_group = group
-		b.text = c["name"]
-		b.icon = _avatar_texture(c["frame"])
-		b.expand_icon = true
-		b.add_theme_constant_override("icon_max_width", 48)
-		b.add_theme_font_size_override("font_size", 22)
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		b.custom_minimum_size = Vector2(0, 72)
-		b.focus_mode = Control.FOCUS_NONE
-		b.add_theme_stylebox_override("pressed", selected_style)
-		b.add_theme_stylebox_override("hover_pressed", selected_style)
-		b.toggled.connect(_on_class_toggled.bind(c["frame"]))
-		class_row.add_child(b)
-		_class_buttons[c["frame"]] = b
-
 	# Áudio
 	var audio_title := Label.new()
 	audio_title.text = "Áudio"
@@ -433,16 +401,6 @@ func _commit_name() -> void:
 		_name_edit.text = n
 
 
-func _on_class_toggled(pressed: bool, frame: int) -> void:
-	if not pressed or frame == Game.class_frame:
-		return
-	Game.class_frame = frame
-	Game.save_profile()
-	Audio.play_sfx("click")
-	class_selected.emit(frame)
-	Game.profile_changed.emit()
-
-
 func _on_music_changed(value: float) -> void:
 	Game.music_volume = value
 	Audio.apply_volumes()
@@ -470,8 +428,6 @@ func _refresh_profile() -> void:
 	_class_label.text = "%s  •  Nível %d" % [Game.class_name_of(Game.class_frame), Game.level]
 	if _name_edit.text != Game.player_name:
 		_name_edit.text = Game.player_name
-	if _class_buttons.has(Game.class_frame):
-		(_class_buttons[Game.class_frame] as Button).set_pressed_no_signal(true)
 	_music_slider.set_value_no_signal(Game.music_volume)
 	_sfx_slider.set_value_no_signal(Game.sfx_volume)
 	_update_stats_label()
