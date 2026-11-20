@@ -1,0 +1,46 @@
+rules_version = '2';
+
+// Regras do Firestore do Eternal Legends.
+// Cole no Firebase Console: Firestore Database > Regras > Publicar.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // GM = existe o documento gms/<uid>. Esse documento só pode ser criado
+    // pelo Console do Firebase (o app nunca consegue escrever em gms).
+    function isGm() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/gms/$(request.auth.uid));
+    }
+
+    match /players/{uid} {
+      // O dono lê o próprio perfil; GM lê o de qualquer jogador.
+      allow read: if signedIn() && (request.auth.uid == uid || isGm());
+
+      // Criação: só o dono, só o próprio perfil, já sem classe.
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['username', 'class_id', 'created_at'])
+        && request.resource.data.username is string
+        && request.resource.data.username.size() <= 16
+        && request.resource.data.class_id == null;
+
+      // Escolha de classe: só o dono, só UMA vez (class_id vazio -> id válido)
+      // e nenhum outro campo pode mudar. Não há regra para trocar depois.
+      allow update: if signedIn() && request.auth.uid == uid
+        && (!('class_id' in resource.data) || resource.data.class_id == null)
+        && request.resource.data.class_id in ['warrior', 'archer', 'mage']
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['class_id']);
+
+      allow delete: if false;
+    }
+
+    // Lista de GMs: cada um só enxerga o próprio documento; ninguém escreve pelo app.
+    match /gms/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+  }
+}
