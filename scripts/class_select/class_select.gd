@@ -72,6 +72,10 @@ func _load_class() -> void:
 	if not res["ok"]:
 		_show_error(str(res["message"]), str(res["code"]) != "unauthorized")
 		return
+	var gm: bool = await _profile.fetch_is_gm()
+	if not is_inside_tree() or _finished:
+		return
+	Game.is_gm = gm
 	var cid: String = str(res["class_id"])
 	if cid != "":
 		_finish(cid) # a conta já tem classe: não mostra a seleção
