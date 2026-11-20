@@ -65,6 +65,36 @@ func allow_debug_entry() -> void:
 	class_confirmed = true
 
 
+# Estilo de combate do personagem: vem da classe confirmada pela conta.
+# (No modo debug, sem servidor, usa a classe em cache.)
+func combat_class_id() -> String:
+	if class_id != "" and frame_of_id(class_id) >= 0:
+		return class_id
+	for c in CLASSES:
+		if c["frame"] == class_frame:
+			return c["id"]
+	return "warrior"
+
+
+# Tutorial inicial: gravado por conta (uid) no arquivo local de perfil.
+func _tutorial_key() -> String:
+	return Session.uid if Session.is_active() else "debug"
+
+
+func is_tutorial_done() -> bool:
+	var cfg := ConfigFile.new()
+	if cfg.load(SAVE_PATH) != OK:
+		return false
+	return bool(cfg.get_value("tutorial", _tutorial_key(), false))
+
+
+func complete_tutorial() -> void:
+	var cfg := ConfigFile.new()
+	cfg.load(SAVE_PATH) # se o arquivo ainda não existe, começa vazio
+	cfg.set_value("tutorial", _tutorial_key(), true)
+	cfg.save(SAVE_PATH)
+
+
 func class_name_of(frame: int) -> String:
 	for c in CLASSES:
 		if c["frame"] == frame:
@@ -91,6 +121,7 @@ func add_xp(amount: int) -> bool:
 
 func save_profile() -> void:
 	var cfg := ConfigFile.new()
+	cfg.load(SAVE_PATH) # preserva outras seções (ex.: tutorial concluído)
 	cfg.set_value("profile", "name", player_name)
 	cfg.set_value("profile", "class_frame", class_frame)
 	cfg.set_value("profile", "level", level)
