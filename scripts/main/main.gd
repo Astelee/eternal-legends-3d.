@@ -24,12 +24,16 @@ var _card_label: Label
 
 
 func _ready() -> void:
+	# O mundo só abre com a classe confirmada pela conta (ou entrada de debug).
+	if not Game.class_confirmed:
+		set_process(false)
+		get_tree().change_scene_to_file.call_deferred("res://scenes/login/login_screen.tscn")
+		return
 	_player.joystick = _joystick
 	_player.set_character_frame(Game.class_frame)
 
 	_hud.attack_pressed.connect(_player.attack)
 	_hud.revive_pressed.connect(_on_revive_pressed)
-	_hud.class_selected.connect(_player.set_character_frame)
 	_hud.profile_opened.connect(_joystick.reset_input)
 
 	_player.hp_changed.connect(_hud.set_hp)
