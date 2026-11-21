@@ -21,6 +21,7 @@ var _filter_buttons: Array = []
 var _capacity_label: Label
 var _toast: Label
 var _portrait: TextureRect
+var _portrait_char: LayeredCharacter = null
 var _portrait_frame: PanelContainer
 
 var _detail_icon: TextureRect
@@ -370,12 +371,32 @@ func _refresh() -> void:
 	_refresh_details()
 
 
+# Retrato com o MESMO estado de equipamentos do mundo (Game.equipped), para classes em camadas.
+func _layered_portrait_texture() -> Texture2D:
+	var cid: String = Game.combat_class_id()
+	if not CharacterDefs.has_class(cid):
+		return null
+	if _portrait_char == null:
+		_portrait_char = LayeredCharacter.new()
+		_portrait_char.visible = false
+		add_child(_portrait_char)
+	if _portrait_char.class_id != cid and not _portrait_char.setup(cid):
+		return null
+	_portrait_char.set_equipment(Game.equipped)
+	_portrait_char.update_pose("idle", "down", false, 0.0)
+	var img := _portrait_char.compose_image(Vector2i(48, 56), Vector2i(24, 52))
+	return ImageTexture.create_from_image(img)
+
+
 func _refresh_portrait() -> void:
 	var atlas := AtlasTexture.new()
 	atlas.atlas = CHAR_TEX
 	var f: int = Game.class_frame
 	atlas.region = Rect2((f % 12) * 16, (f / 12) * 16, 16, 16)
 	_portrait.texture = atlas
+	var layered_tex := _layered_portrait_texture()
+	if layered_tex != null:
+		_portrait.texture = layered_tex
 	var weapon_id := str(Game.equipped.get("weapon", ""))
 	var glow := Color("#4a3f6a")
 	if weapon_id != "":
