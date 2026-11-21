@@ -36,6 +36,8 @@ var _state_timer: float = 0.0
 var _anim_time: float = 0.0
 var _facing: Vector2 = Vector2.DOWN
 var _facing_left: bool = false
+# Personagem em camadas (piloto: arqueiro). null = usa o sprite 16x16 antigo.
+var _layered: LayeredCharacter = null
 var _step_timer: float = 0.0
 var _hit_done: bool = false
 var _invuln: float = 0.0
@@ -65,6 +67,7 @@ func _ready() -> void:
 	_build_fx()
 	set_combat_class(ClassCombat.id_from_frame(character_frame))
 	_apply_frame()
+	_refresh_layered()
 	_last_level = Game.level
 	max_hp = _max_hp_for(Game.level)
 	hp = max_hp
@@ -191,6 +194,7 @@ func set_combat_class(id: String) -> void:
 	_skill_cd = 0.0
 	if is_node_ready():
 		_apply_frame()
+		_refresh_layered()
 
 
 # Vira para o inimigo mais próximo dentro de max_dist (facilita o toque no celular).
@@ -278,6 +282,8 @@ func _spin_hit() -> void:
 
 # Arqueiro / Mago: ponto de onde sai o projétil (na frente do personagem).
 func _muzzle() -> Vector2:
+	if _layered != null:
+		return global_position + Vector2(0, -20) + _facing * 10.0 # personagem de 40 px: sai do peito
 	return global_position + Vector2(0, -6) + _facing * 8.0
 
 
@@ -389,6 +395,8 @@ func _max_hp_for(level: int) -> int:
 
 # Equipou ou tirou um item: recalcula a vida máxima.
 func _on_gear_changed() -> void:
+	if _layered != null:
+		_layered.set_equipment(Game.equipped)
 	var new_max := _max_hp_for(Game.level)
 	if new_max == max_hp:
 		return
@@ -450,6 +458,44 @@ func _apply_frame() -> void:
 		if wf < 0:
 			wf = 104
 		_weapon_sprite.region_rect = Rect2((wf % FRAME_COLS) * FRAME_SIZE, (wf / FRAME_COLS) * FRAME_SIZE, FRAME_SIZE, FRAME_SIZE)
+
+
+# Liga/desliga o personagem em camadas conforme a classe tem dados em CharacterDefs.
+func _refresh_layered() -> void:
+	var ok := CharacterDefs.has_class(combat_class)
+	if ok:
+		if _layered == null:
+			_layered = LayeredCharacter.new()
+			_layered.name = "Layered"
+			_visual.add_child(_layered)
+		ok = _layered.setup(combat_class)
+	if not ok and _layered != null:
+		_layered.queue_free()
+		_layered = null
+	_body.visible = _layered == null
+	if _layered != null:
+		_layered.set_equipment(Game.equipped)
+
+
+func _pose_anim() -> String:
+	match state:
+		State.WALK:
+			return "walk"
+		State.RUN:
+			return "run"
+		State.ATTACK:
+			return "skill" if _skill_mode else "attack"
+		State.HURT:
+			return "hit"
+		State.DEAD:
+			return "death"
+	return "idle"
+
+
+func _pose_dir() -> String:
+	if absf(_facing.y) > absf(_facing.x):
+		return "down" if _facing.y > 0.0 else "up"
+	return "side"
 
 
 func _attack_progress() -> float:
@@ -520,11 +566,20 @@ func _update_visual(delta: float) -> void:
 	if _invuln > 0.0 and state != State.DEAD and int(_invuln * 25.0) % 2 == 0:
 		tint.a = 0.5
 
+	if _layered != null:
+		# Sem balanço/giro/escala inventados para o personagem em camadas:
+		# locomoção, ataque e morte ficam PENDENTES até haver quadros reais.
+		offset = Vector2.ZERO
+		rot = 0.0
+		scl = Vector2.ONE
 	_visual.position = offset
 	_visual.rotation = rot
 	_visual.scale = scl
 	_body.flip_h = _facing_left
 	_body.modulate = tint
+	if _layered != null:
+		_layered.update_pose(_pose_anim(), _pose_dir(), _facing_left, delta)
+		_layered.set_tint(tint)
 
 	_weapon.visible = state != State.DEAD and combat_class != "archer"
 	_weapon.position = Vector2(-6.0 if _facing_left else 6.0, -6.0)
